@@ -1,0 +1,23 @@
+### Python ###
+
+# Byte-copiled
+__pycache__/
+*.pyc
+
+# Distribution
+build/
+dist/
+*.egg-info/
+
+
+### Jupyter ###
+.ipynb_checkpoints/
+
+
+### Figures ###
+*.pdf
+*.eps
+
+
+### SN data base ###
+sne/

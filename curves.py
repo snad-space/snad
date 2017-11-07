@@ -91,21 +91,37 @@ class SNCurve:
         self._data = json_data
         self.bands = transform_value_to_set_like(bands)
         self.name = self._data['name']
-        self.claimedtype = self._data['claimedtype'][0]['value']
+        self.claimedtype = self._data['claimedtype'][0]['value']  # TODO: examine other values
         self.photometry = self._construct_photometry()
 
     def _construct_photometry(self):
-        dots = []
-        for dot in self._data['photometry']:
-            if dot.get('band') in self.bands and 'time' in dot:
-                dots.append(( dot['time'], dot['magnitude'], dot['band'] ))
-        return np.array(dots,
-                        dtype=[('time', np.float), ('mag', np.float), ('band', BAND_DTYPE)])
+        def dots_generator():
+            for dot in self._data['photometry']:
+                if dot.get('band') in self.bands and 'time' in dot:
+                    yield (
+                        dot['time'],
+                        dot.get('e_time', np.nan),
+                        dot['magnitude'],
+                        dot.get('e_magnitude', np.nan),
+                        dot['band'],
+                    )
+        dots = np.array(
+            dots_generator(),
+            dtype=[
+                ('time', np.float),
+                ('e_time', np.float),
+                ('mag', np.float),
+                ('e_mag', np.float),
+                ('band', BAND_DTYPE),
+            ]
+        )
+        dots = dots[np.argsort(dots['time'])]
+        return dots
 
     def spline(self, band=None, delta_mag=0.01, k=3):
         if band is None:
             if len(self.bands) > 1:
-                raise('Please, specify band, because len(self.bands) > 1')
+                raise ValueError('Please, specify band, because len(self.bands) > 1')
             else:
                 band = self.bands.copy().pop()
         photo_in_band = self.photometry[self.photometry['band']==band]
@@ -208,10 +224,7 @@ class SNDataForLearning(SNFiles):
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
-    # c = SNFiles('/Users/hombit/Downloads/Unknown.csv')
-    # logging.info(c)
-    #
-    # s = SNCurve.from_json('sne/SN1991T.json', bands=None)
+    # s = SNCurve.from_json('sne/SN1994D.json', bands=None)
     # logging.info(s)
     # s.spline('V')
 
