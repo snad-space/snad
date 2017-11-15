@@ -16,10 +16,12 @@ from scipy import interpolate
 
 BAND_DTYPE = 'U8'
 SN_TYPE_DTYPE = 'U8'
-MAX_INT = sys.maxsize
 
 
 class SNFiles(list):
+    """Holds a list of SNs, paths to related *.json and download these files if
+    needed.
+    """
     _path = 'sne/'
     _baseurl = 'https://sne.space/sne/'
 
@@ -62,34 +64,94 @@ class SNFiles(list):
 
     @staticmethod
     def _names_from_csvfile(filename):
+        """Get SN names from the `Name` column of CSV file. Such the file can
+        be obtained from https://sne.space"""
         from pandas import read_csv
         data = read_csv(filename)
         return data.Name.as_matrix()
 
 
-class ContainsEverythingExceptNone:
+def _singleton(cls):
+    """Singleton decorator from PEP 318 examples"""
+    instances = {}
+
+    def get_instance():
+        if cls not in instances:
+            instances[cls] = cls()
+        return instances[cls]
+
+    return get_instance
+
+
+@_singleton
+class __ContainsEverythingButNone:
+    """Use an instance of this object `contains_everything_but_none`.
+
+    `in` operator with this `contains_everything_but_none` as the second
+    argument will always return `True` but in case of the first argument is
+    `None`. The instance size equals `sys.maxsize`.
+
+    >>> from curves import _contains_everything_but_none
+    >>> print(0 in _contains_everything_but_none)
+    True
+    >>> print('hello' in _contains_everything_but_none)
+    True
+    >>> print(None in _contains_everything_but_none)
+    False
+    """
     def __contains__(self, item):
         return item is not None
 
     def __len__(self):
-        return MAX_INT
+        return sys.maxsize
 
 
-def transform_value_to_set_like(value):
+_contains_everything_but_none = __ContainsEverythingButNone()
+
+
+def transform_to_set_like(value):
+    """If `value` is a string contained comma separated sub-strings, these
+    sub-strings are putted into set, other iterable will putted into set
+    unmodified, if `value` is `None`, `_contains_everything_but_none` is
+    returned.
+    """
     if value is None:
-        return ContainsEverythingExceptNone()
+        return _contains_everything_but_none
     else:
-        # if isinstance(value, str):
-        #    value = value.encode()
         if isinstance(value, str):
             value = value.split(',')
         return set(value)
 
 
-class SNCurve:
+class SNCurve():
+    __photometry_dtype = [
+        ('time', np.float),
+        ('e_time', np.float),
+        ('mag', np.float),
+        ('e_mag', np.float),
+        ('band', BAND_DTYPE),
+    ]
+    __doc__ = """SN photometric data.
+
+    Represent photometric data of SN in specified bands and some additional
+    metadata.
+
+    Parameters
+    ----------
+    photometry: numpy record array
+        Photometric data in specified bands, dtype is
+        `{dtype}` 
+    name: string
+        SN name.
+    claimedtype: string
+        SN type.
+    bands: set of strings
+        Photometric bands that are appeared in `photometry`.     
+    """.format(dtype=__photometry_dtype)
+
     def __init__(self, json_data, bands=None):
         self._data = json_data
-        self.bands = transform_value_to_set_like(bands)
+        self.bands = transform_to_set_like(bands)
         self.name = self._data['name']
         self.claimedtype = self._data['claimedtype'][0]['value']  # TODO: examine other values
         self.photometry = self._construct_photometry()
@@ -105,16 +167,7 @@ class SNCurve:
                         dot.get('e_magnitude', np.nan),
                         dot['band'],
                     )
-        dots = np.array(
-            dots_generator(),
-            dtype=[
-                ('time', np.float),
-                ('e_time', np.float),
-                ('mag', np.float),
-                ('e_mag', np.float),
-                ('band', BAND_DTYPE),
-            ]
-        )
+        dots = np.fromiter(dots_generator(), dtype=self.__photometry_dtype)
         dots = dots[np.argsort(dots['time'])]
         return dots
 
@@ -169,6 +222,16 @@ class SNCurve:
 
     @classmethod
     def from_json(cls, filename, snname=None, **kwargs):
+        """Load photometric data from json file loaded from sne.space.
+
+        Parameters
+        ----------
+        filename: string
+            File path.
+        snname: string, optional
+            Specifies a name of SN, default is automatically obtaining from
+            filename or its data.
+        """
         with open(filename, 'r') as fd:
             data = json.load(fd)
         if snname is None:
@@ -224,9 +287,9 @@ class SNDataForLearning(SNFiles):
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
-    # s = SNCurve.from_json('sne/SN1994D.json', bands=None)
-    # logging.info(s)
+    s = SNCurve.from_json('sne/SN1994D.json', bands=None)
+    logging.info(s)
     # s.spline('V')
 
-    d = SNDataForLearning('./SN_phot100.csv', bands='V')
-    X, y = d.X_y(n_dots=100, time_interval=(-50, 350))
+    # d = SNDataForLearning('./SN_phot100.csv', bands='V')
+    # X, y = d.X_y(n_dots=100, time_interval=(-50, 350))
