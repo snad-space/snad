@@ -71,56 +71,15 @@ class SNFiles(list):
         return data.Name.as_matrix()
 
 
-def _singleton(cls):
-    """Singleton decorator from PEP 318 examples"""
-    instances = {}
-
-    def get_instance():
-        if cls not in instances:
-            instances[cls] = cls()
-        return instances[cls]
-
-    return get_instance
-
-
-@_singleton
-class __ContainsEverythingButNone:
-    """Use an instance of this object `contains_everything_but_none`.
-
-    `in` operator with this `contains_everything_but_none` as the second
-    argument will always return `True` but in case of the first argument is
-    `None`. The instance size equals `sys.maxsize`.
-
-    >>> from curves import _contains_everything_but_none
-    >>> print(0 in _contains_everything_but_none)
-    True
-    >>> print('hello' in _contains_everything_but_none)
-    True
-    >>> print(None in _contains_everything_but_none)
-    False
+def _transform_to_set(value):
+    """If `value` is a string contained comma separated spaceless sub-strings,
+    these sub-strings are putted into set, other iterable will putted into set
+    unmodified.
     """
-    def __contains__(self, item):
-        return item is not None
-
-    def __len__(self):
-        return sys.maxsize
-
-
-_contains_everything_but_none = __ContainsEverythingButNone()
-
-
-def transform_to_set_like(value):
-    """If `value` is a string contained comma separated sub-strings, these
-    sub-strings are putted into set, other iterable will putted into set
-    unmodified, if `value` is `None`, `_contains_everything_but_none` is
-    returned.
-    """
-    if value is None:
-        return _contains_everything_but_none
-    else:
-        if isinstance(value, str):
-            value = value.split(',')
-        return set(value)
+    if isinstance(value, str):
+        value = value.replace(' ', '')
+        value = value.split(',')
+    return set(value)
 
 
 class SNCurve():
@@ -143,23 +102,25 @@ class SNCurve():
         `{dtype}` 
     name: string
         SN name.
-    claimedtype: string
+    claimed_type: string
         SN type.
     bands: set of strings
-        Photometric bands that are appeared in `photometry`.     
+        Photometric bands that are appeared in `photometry`.   
     """.format(dtype=__photometry_dtype)
 
     def __init__(self, json_data, bands=None):
         self._data = json_data
-        self.bands = transform_to_set_like(bands)
-        self.name = self._data['name']
-        self.claimedtype = self._data['claimedtype'][0]['value']  # TODO: examine other values
-        self.photometry = self._construct_photometry()
+        self._name = self._data['name']
+        self._claimed_type = self._data['claimedtype'][0]['value']  # TODO: examine other values
 
-    def _construct_photometry(self):
-        def dots_generator():
+        if bands is not None:
+            bands = _transform_to_set(bands)
+
+        def photometry_generator():
             for dot in self._data['photometry']:
-                if dot.get('band') in self.bands and 'time' in dot:
+                if 'time' in dot and 'band' in dot:
+                    if (bands is not None) and (dot.get('band') not in bands):
+                        continue
                     yield (
                         dot['time'],
                         dot.get('e_time', np.nan),
@@ -167,9 +128,15 @@ class SNCurve():
                         dot.get('e_magnitude', np.nan),
                         dot['band'],
                     )
-        dots = np.fromiter(dots_generator(), dtype=self.__photometry_dtype)
-        dots = dots[np.argsort(dots['time'])]
-        return dots
+
+        self.photometry = np.fromiter(photometry_generator(), dtype=self.__photometry_dtype)
+        # All photometry dates should be sorted, so it is cheaper to check it than sort every time:
+        if np.any(np.diff(self.photometry['time']) < 0):
+            logging.warning('SN {} data contains unordered dots'.format(self._name))
+            self.photometry[:] = self.photometry[np.argsort(self.photometry['time'])]
+        self.photometry.flags.writeable = False
+
+        self.bands = frozenset(self.photometry['band'])
 
     def spline(self, band=None, delta_mag=0.01, k=3):
         if band is None:
@@ -250,6 +217,14 @@ class SNCurve():
     def __repr__(self):
         return repr(self.photometry)
 
+    @property
+    def name(self):
+        return self._name
+
+    @property
+    def claimed_type(self):
+        return self._claimed_type
+
 
 class SNDataForLearning(SNFiles):
     def __init__(self, *args, bands=None, **kwargs):
@@ -286,7 +261,7 @@ class SNDataForLearning(SNFiles):
 
 
 if __name__ == '__main__':
-    logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(level=logging.DEBUG)
     s = SNCurve.from_json('sne/SN1994D.json', bands=None)
     logging.info(s)
     # s.spline('V')
