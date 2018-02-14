@@ -118,7 +118,7 @@ class SNCurve():
 
         def photometry_generator():
             for dot in self._data['photometry']:
-                if 'time' in dot and 'band' in dot:
+                if 'time' in dot and 'band' in dot and not dot.get('upperlimit', False):
                     if (bands is not None) and (dot.get('band') not in bands):
                         continue
                     yield (
