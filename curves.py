@@ -3,12 +3,13 @@ from __future__ import division
 import json
 import logging
 import os, os.path
+from collections import Iterable
+
 import numpy as np
 import requests
 import six
 from six.moves import urllib
 from six.moves import UserList
-from collections import Iterable
 
 
 if six.PY2:
@@ -61,7 +62,7 @@ class SNFiles(UserList):
                 r = requests.get(self.urls[i], stream=True)
                 r.raise_for_status()
                 with open(filepath, 'wb') as fd:
-                    for chunk in r.iter_content(chunk_size=4096):
+                    for chunk in r.iter_content(chunk_size=None):
                         fd.write(chunk)
 
     def __repr__(self):
