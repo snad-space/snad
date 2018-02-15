@@ -86,8 +86,8 @@ class SNCurve():
     __photometry_dtype = [
         ('time', np.float),
         ('e_time', np.float),
-        ('mag', np.float),
-        ('e_mag', np.float),
+        ('flux', np.float),
+        ('e_flux', np.float),
         ('band', BAND_DTYPE),
     ]
     __doc__ = """SN photometric data.
@@ -121,11 +121,21 @@ class SNCurve():
                 if 'time' in dot and 'band' in dot and not dot.get('upperlimit', False):
                     if (bands is not None) and (dot.get('band') not in bands):
                         continue
+                    magn = float(dot['magnitude'])
+                    flux = np.power(10, -0.4*magn)
+                    if 'e_lower_magnitude' in dot and 'e_upper_magnitude' in dot:
+                        flux_lower = np.power(10, -0.4*(magn+float(dot['e_lower_magnitude'])))
+                        flux_upper = np.power(10, -0.4*(magn-float(dot['e_upper_magnitude'])))
+                        e_flux = 0.5 * (flux_upper - flux_lower)
+                    elif 'e_magnitude' in dot:
+                        e_flux = 0.4 * np.log(10) * flux * float(dot['e_magnitude'])
+                    else:
+                        e_flux = np.nan
                     yield (
                         dot['time'],
                         dot.get('e_time', np.nan),
-                        dot['magnitude'],
-                        dot.get('e_magnitude', np.nan),
+                        flux,
+                        e_flux,
                         dot['band'],
                     )
 
@@ -262,7 +272,7 @@ class SNDataForLearning(SNFiles):
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.DEBUG)
-    s = SNCurve.from_json('sne/SN1994D.json', bands=None)
+    s = SNCurve.from_json('sne/SNLS-04D3fq.json', bands=None)
     logging.info(s)
     # s.spline('V')
 
