@@ -148,54 +148,54 @@ class SNCurve():
 
         self.bands = frozenset(self.photometry['band'])
 
-    def spline(self, band=None, delta_mag=0.01, k=3):
-        if band is None:
-            if len(self.bands) > 1:
-                raise ValueError('Please, specify band, because len(self.bands) > 1')
-            else:
-                band = self.bands.copy().pop()
-        photo_in_band = self.photometry[self.photometry['band']==band]
-
-        if photo_in_band.shape[0] < k+1:
-            return np.zeros_like
-
-        epsilon_flux = 1. - 10.**(-0.4 * delta_mag)
-        flux = np.power(10., -0.4 * photo_in_band['mag'])
-        weight = 1. / (epsilon_flux * flux)
-        time = photo_in_band['time'] - photo_in_band['time'][flux.argmax()]
-        # spline = interpolate.interp1d(time, flux,
-        #                               copy=False,
-        #                               bounds_error=False, fill_value=0,
-        #                               kind='cubic')
-        test_time = np.average(time)
-        max_flux_gradient = None
-        s = time.shape[0] / 2.
-        while True:
-            s *= 2
-            spline = interpolate.UnivariateSpline(time, flux, w=weight, s=s, k=k, ext='zeros')
-            # Check the smoothing spline is self-constistent
-            if spline.get_residual() > s:
-                continue
-            # Check if one value of the spline is NaN
-            if np.isnan(spline(test_time)):
-                continue
-            # Check if any values in interpolated dots are NaN
-            if np.any(np.isnan(spline(time))):
-                continue
-            derivatives = spline.derivative()(time)
-            # Check if any derivatives in interpolated dots are NaN
-            if np.any(np.isnan(derivatives)):
-                continue
-            if max_flux_gradient is None:
-                flux_gradient = np.gradient(flux, np.gradient(time))
-                flux_gradient[np.isinf(flux_gradient)] = 0
-                max_flux_gradient = np.max(np.abs(flux_gradient))
-            # Check if any derivative is too steep
-            if np.any(np.abs(derivatives[k-1:1-k]) > max_flux_gradient):
-                continue
-            break
-
-        return spline
+    # def spline(self, band=None, delta_mag=0.01, k=3):
+    #     if band is None:
+    #         if len(self.bands) > 1:
+    #             raise ValueError('Please, specify band, because len(self.bands) > 1')
+    #         else:
+    #             band = self.bands.copy().pop()
+    #     photo_in_band = self.photometry[self.photometry['band']==band]
+    #
+    #     if photo_in_band.shape[0] < k+1:
+    #         return np.zeros_like
+    #
+    #     epsilon_flux = 1. - 10.**(-0.4 * delta_mag)
+    #     flux = np.power(10., -0.4 * photo_in_band['mag'])
+    #     weight = 1. / (epsilon_flux * flux)
+    #     time = photo_in_band['time'] - photo_in_band['time'][flux.argmax()]
+    #     # spline = interpolate.interp1d(time, flux,
+    #     #                               copy=False,
+    #     #                               bounds_error=False, fill_value=0,
+    #     #                               kind='cubic')
+    #     test_time = np.average(time)
+    #     max_flux_gradient = None
+    #     s = time.shape[0] / 2.
+    #     while True:
+    #         s *= 2
+    #         spline = interpolate.UnivariateSpline(time, flux, w=weight, s=s, k=k, ext='zeros')
+    #         # Check the smoothing spline is self-constistent
+    #         if spline.get_residual() > s:
+    #             continue
+    #         # Check if one value of the spline is NaN
+    #         if np.isnan(spline(test_time)):
+    #             continue
+    #         # Check if any values in interpolated dots are NaN
+    #         if np.any(np.isnan(spline(time))):
+    #             continue
+    #         derivatives = spline.derivative()(time)
+    #         # Check if any derivatives in interpolated dots are NaN
+    #         if np.any(np.isnan(derivatives)):
+    #             continue
+    #         if max_flux_gradient is None:
+    #             flux_gradient = np.gradient(flux, np.gradient(time))
+    #             flux_gradient[np.isinf(flux_gradient)] = 0
+    #             max_flux_gradient = np.max(np.abs(flux_gradient))
+    #         # Check if any derivative is too steep
+    #         if np.any(np.abs(derivatives[k-1:1-k]) > max_flux_gradient):
+    #             continue
+    #         break
+    #
+    #     return spline
 
     @classmethod
     def from_json(cls, filename, snname=None, **kwargs):
@@ -236,35 +236,35 @@ class SNCurve():
         return self._claimed_type
 
 
-class SNDataForLearning(SNFiles):
-    def __init__(self, *args, bands=None, **kwargs):
-        super().__init__(*args, **kwargs)
-
-        self.curves = []
-        for i, filepath in enumerate(self.filepaths):
-            self.curves.append(SNCurve.from_json(filepath, snname=self[i], bands=bands))
-
-        if bands is None:
-            self.bands = sorted(set(chain.from_iterable(curve.photometry['band'] for curve in self.curves)))
-        else:
-            self.bands = bands
-
-    def X_y(self, n_dots=100, time_interval=(-50, 350), normalize_flux=True):
-        self.n_dots = n_dots
-        self.time_interval = time_interval
-
-        self.time_dots = np.linspace(*self.time_interval, self.n_dots)
-
-        self.X = np.empty((len(self.curves), n_dots * len(self.bands)), dtype=np.float)
-        self.y = np.fromiter( [curve.claimedtype for curve in self.curves], dtype=SN_TYPE_DTYPE, count=len(self.curves) )
-        for i_curve, curve in enumerate(self.curves):
-            for i_band, band in enumerate(self.bands):
-                dots = curve.spline(band)(self.time_dots)
-                if normalize_flux:
-                    dots /= dots.max()
-                self.X[i_curve, i_band * n_dots:(i_band + 1) * n_dots] = dots
-
-        return self.X, self.y
+# class SNDataForLearning(SNFiles):
+#     def __init__(self, *args, bands=None, **kwargs):
+#         super().__init__(*args, **kwargs)
+#
+#         self.curves = []
+#         for i, filepath in enumerate(self.filepaths):
+#             self.curves.append(SNCurve.from_json(filepath, snname=self[i], bands=bands))
+#
+#         if bands is None:
+#             self.bands = sorted(set(chain.from_iterable(curve.photometry['band'] for curve in self.curves)))
+#         else:
+#             self.bands = bands
+#
+#     def X_y(self, n_dots=100, time_interval=(-50, 350), normalize_flux=True):
+#         self.n_dots = n_dots
+#         self.time_interval = time_interval
+#
+#         self.time_dots = np.linspace(*self.time_interval, self.n_dots)
+#
+#         self.X = np.empty((len(self.curves), n_dots * len(self.bands)), dtype=np.float)
+#         self.y = np.fromiter( [curve.claimedtype for curve in self.curves], dtype=SN_TYPE_DTYPE, count=len(self.curves) )
+#         for i_curve, curve in enumerate(self.curves):
+#             for i_band, band in enumerate(self.bands):
+#                 dots = curve.spline(band)(self.time_dots)
+#                 if normalize_flux:
+#                     dots /= dots.max()
+#                 self.X[i_curve, i_band * n_dots:(i_band + 1) * n_dots] = dots
+#
+#         return self.X, self.y
 
 
 ################################################################################
