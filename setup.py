@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 from setuptools import setup
 
 setup(
@@ -6,4 +8,5 @@ setup(
     author='Konstantin Malanchev',
     author_email='malanchev@physics.msu.ru',
     py_modules=['curves'],
+    test_suite='test',
 )
