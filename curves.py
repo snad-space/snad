@@ -1,6 +1,4 @@
-#!/usr/bin/env python
-
-from __future__ import print_function, division
+from __future__ import division
 
 import json
 import logging
@@ -9,6 +7,7 @@ import numpy as np
 import requests
 import six
 from six.moves import urllib
+from six.moves import UserList
 from collections import Iterable
 
 
@@ -22,7 +21,7 @@ else:
     raise RuntimeError('Future guys, add a support of Python >3!')
 
 
-class SNFiles(list):
+class SNFiles(UserList):
     """Holds a list of SNs, paths to related *.json and download these files if
     needed.
     """
@@ -35,7 +34,7 @@ class SNFiles(list):
         if not isinstance(sns, Iterable):
             raise ValueError('sns should be filename or iterable')
 
-        super().__init__(sns)
+        super(SNFiles, self).__init__(sns)
 
         if path is not None:
             self._path = path
@@ -50,7 +49,11 @@ class SNFiles(list):
         self._download(nocache=nocache)
 
     def _download(self, nocache):
-        os.makedirs(self._path, exist_ok=True)
+        try:
+            os.makedirs(self._path)
+        except OSError as e:
+            if not os.path.isdir(self._path):
+                raise e
         for i, filepath in enumerate(self.filepaths):
             if nocache or not os.path.exists(filepath):
                 logging.info('Downloading {}'.format(self._filenames[i]))
@@ -270,15 +273,3 @@ class SNCurve():
 #
 #         return self.X, self.y
 
-
-################################################################################
-
-
-if __name__ == '__main__':
-    logging.basicConfig(level=logging.DEBUG)
-    s = SNCurve.from_json('sne/SNLS-04D3fq.json', bands=None)
-    logging.info(s)
-    # s.spline('V')
-
-    # d = SNDataForLearning('./SN_phot100.csv', bands='V')
-    # X, y = d.X_y(n_dots=100, time_interval=(-50, 350))
