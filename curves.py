@@ -109,8 +109,8 @@ class SNCurve():
         `{dtype}` 
     name: string
         SN name.
-    claimed_type: string
-        SN type.
+    claimed_type: string or None
+        SN claimed type, None if no claimed type is specified
     bands: set of strings
         Photometric bands that are appeared in `photometry`.   
     """.format(dtype=__photometry_dtype)
@@ -118,7 +118,11 @@ class SNCurve():
     def __init__(self, json_data, bands=None):
         self._data = json_data
         self._name = self._data['name']
-        self._claimed_type = self._data['claimedtype'][0]['value']  # TODO: examine other values
+
+        if 'claimedtype' in self._data:
+            self._claimed_type = self._data['claimedtype'][0]['value']  # TODO: examine other values
+        else:
+            self._claimed_type = None
 
         if bands is not None:
             bands = _transform_to_set(bands)
