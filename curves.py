@@ -7,15 +7,19 @@ import logging
 import os, os.path
 import numpy as np
 import requests
-import sys
-import urllib.parse
+import six
+from six.moves import urllib
 from collections import Iterable
-from itertools import chain
-from scipy import interpolate
 
 
-BAND_DTYPE = 'U8'
-SN_TYPE_DTYPE = 'U8'
+if six.PY2:
+    BAND_DTYPE = 'S8'
+    SN_TYPE_DTYPE = 'S8'
+elif six.PY3:
+    BAND_DTYPE = 'U8'
+    SN_TYPE_DTYPE = 'U8'
+else:
+    raise RuntimeError('Future guys, add a support of Python >3!')
 
 
 class SNFiles(list):
