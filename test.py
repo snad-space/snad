@@ -14,5 +14,5 @@ class DownloadAndRead(TestCase):
 
     def test_download_and_read(self):
         sn_files = SNFiles(self.sns)
-        for fname in sn_files:
+        for fname in sn_files.filepaths:
             self.read_file(fname)
