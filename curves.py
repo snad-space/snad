@@ -15,11 +15,9 @@ from six.moves import UserList
 if six.PY2:
     BAND_DTYPE = 'S8'
     SN_TYPE_DTYPE = 'S8'
-elif six.PY3:
+else:
     BAND_DTYPE = 'U8'
     SN_TYPE_DTYPE = 'U8'
-else:
-    raise RuntimeError('Future guys, add a support of Python >3!')
 
 
 class SNFiles(UserList):
@@ -154,7 +152,7 @@ class SNCurve():
         self.photometry = np.fromiter(photometry_generator(), dtype=self.__photometry_dtype)
         # All photometry dates should be sorted, so it is cheaper to check it than sort every time:
         if np.any(np.diff(self.photometry['time']) < 0):
-            logging.warning('SN {} data contains unordered dots'.format(self._name))
+            logging.info('Original SN {} data contains unordered dots'.format(self._name))
             self.photometry[:] = self.photometry[np.argsort(self.photometry['time'])]
         self.photometry.flags.writeable = False
 
