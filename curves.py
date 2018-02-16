@@ -7,7 +7,6 @@ from collections import Iterable
 
 import numpy as np
 import requests
-import six
 from six.moves import urllib
 from six.moves import UserList
 
@@ -86,6 +85,7 @@ class SNCurve():
         ('e_time', np.float),
         ('flux', np.float),
         ('e_flux', np.float),
+        ('isupperlimit', np.bool)
     ]
     __doc__ = """SN photometric data.
 
@@ -138,6 +138,7 @@ class SNCurve():
                     dot.get('e_time', np.nan),
                     flux,
                     e_flux,
+                    dot.get('upperlimit', False),
                 ) )
         for k, v in self.photometry.items():
             v = self.photometry[k] = np.array(v, dtype=self.__photometry_dtype)

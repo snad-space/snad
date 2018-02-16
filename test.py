@@ -1,9 +1,11 @@
 #!/usr/bin/env python
 
 import logging
+import operator
 import os.path
 import time
 import unittest
+from functools import reduce
 from tempfile import NamedTemporaryFile
 
 import numpy as np
@@ -17,7 +19,7 @@ SNS_NO_CMAIMED_TYPE = {
     'SNLS-03D3ce',
 }
 
-SNS_UPPERLIMIT = {
+SNS_UPPER_LIMIT = {
     'SNLS-04D3fq',
     'PS1-10ahf',
 }
@@ -31,7 +33,7 @@ SNS_UNORDERED_PHOTOMETRY = {
     'PS1-10ahf',
 }
 
-SNS_ALL = set.union(SNS_NO_CMAIMED_TYPE, SNS_UPPERLIMIT, SNS_E_LOWER_UPPER_MAGNITUDE, SNS_UNORDERED_PHOTOMETRY)
+SNS_ALL = set.union(SNS_NO_CMAIMED_TYPE, SNS_UPPER_LIMIT, SNS_E_LOWER_UPPER_MAGNITUDE, SNS_UNORDERED_PHOTOMETRY)
 
 
 class DownloadTestCase(unittest.TestCase):
@@ -67,19 +69,31 @@ class ReadLightCurvesFromJsonTestCase(unittest.TestCase):
             self.read_file(fname)
 
 
+class UpperLimitTestCase(unittest.TestCase):
+    def setUp(self):
+        sn_files = SNFiles(SNS_UPPER_LIMIT)
+        self.curves = [SNCurve.from_json(fpath) for fpath in sn_files.filepaths]
+
+    def test_has_upper_limit(self):
+        for curve in self.curves:
+            has_upper_limit = reduce(operator.__or__,
+                                     (np.any(lc['isupperlimit']) for lc in curve.photometry.values()))
+            self.assertTrue(has_upper_limit, 'SN {} light curves should have upper limit dots')
+
+
 class TemporalOrderTestCase(unittest.TestCase):
     def setUp(self):
         self.sn_files = SNFiles(SNS_UNORDERED_PHOTOMETRY)
 
     def test_order(self):
-        for fname in self.sn_files.filepaths:
-            curve = SNCurve.from_json(fname)
+        for fpath in self.sn_files.filepaths:
+            curve = SNCurve.from_json(fpath)
             for lc in curve.photometry.values():
                 self.assertTrue(np.all(np.diff(lc['time']) >= 0))
 
     @unittest.skipIf(six.PY2, 'Logging testing is missed in Python 2')
     def test_unordered_logging(self):
-        with self.assertLogs(level=logging.INFO):
-            for fname in self.sn_files.filepaths:
-                curve = SNCurve.from_json(fname)
-                del curve
+        for fpath in self.sn_files.filepaths:
+            with self.assertLogs(level=logging.INFO):
+               curve = SNCurve.from_json(fpath)
+            del curve
