@@ -74,9 +74,10 @@ class TemporalOrderTestCase(unittest.TestCase):
     def test_order(self):
         for fname in self.sn_files.filepaths:
             curve = SNCurve.from_json(fname)
-            self.assertTrue(np.all(np.diff(curve.photometry['time']) >= 0))
+            for lc in curve.photometry.values():
+                self.assertTrue(np.all(np.diff(lc['time']) >= 0))
 
-    @unittest.skip(six.PY2)
+    @unittest.skipIf(six.PY2, 'Logging testing is missed in Python 2')
     def test_unordered_logging(self):
         with self.assertLogs(level=logging.INFO):
             for fname in self.sn_files.filepaths:
