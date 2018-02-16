@@ -33,7 +33,20 @@ SNS_UNORDERED_PHOTOMETRY = {
     'PS1-10ahf',
 }
 
+SNS_HAS_SPECTRA = {
+    'SNLS-04D3fq',
+}
+
+SNS_HAS_NOT_SPECTRA = {
+    'SN1993A',
+}
+
 SNS_ALL = set.union(SNS_NO_CMAIMED_TYPE, SNS_UPPER_LIMIT, SNS_E_LOWER_UPPER_MAGNITUDE, SNS_UNORDERED_PHOTOMETRY)
+
+
+def _get_curves(sns):
+    sn_files = SNFiles(sns)
+    return [SNCurve.from_json(fpath) for fpath in sn_files.filepaths]
 
 
 class DownloadTestCase(unittest.TestCase):
@@ -71,14 +84,25 @@ class ReadLightCurvesFromJsonTestCase(unittest.TestCase):
 
 class UpperLimitTestCase(unittest.TestCase):
     def setUp(self):
-        sn_files = SNFiles(SNS_UPPER_LIMIT)
-        self.curves = [SNCurve.from_json(fpath) for fpath in sn_files.filepaths]
+        self.curves = _get_curves(SNS_UPPER_LIMIT)
 
     def test_has_upper_limit(self):
         for curve in self.curves:
             has_upper_limit = reduce(operator.__or__,
                                      (np.any(lc['isupperlimit']) for lc in curve.photometry.values()))
             self.assertTrue(has_upper_limit, 'SN {} light curves should have upper limit dots')
+
+
+class HasSpectraTestCase(unittest.TestCase):
+    def test_has_spectra(self):
+        curves = _get_curves(SNS_HAS_SPECTRA)
+        for curve in curves:
+            self.assertTrue(curve.has_spectra, 'SN {} data should contain spectra'.format(curve.name))
+
+    def test_has_not_spectra(self):
+        curves = _get_curves(SNS_HAS_NOT_SPECTRA)
+        for curve in curves:
+            self.assertFalse(curve.has_spectra, 'SN {} data should not contain spectra'.format(curve.name))
 
 
 class TemporalOrderTestCase(unittest.TestCase):

@@ -79,6 +79,17 @@ def _transform_to_set(value):
     return set(value)
 
 
+class BadPhotometryDataError(ValueError):
+    def __init__(self, sn_name, dot, field=None):
+        if field is None:
+            self.message = 'SN {name} has a bad photometry item {dot}'.format(name=sn_name, dot=dot)
+        else:
+            self.message = 'SN {name} has a photometry item with bad {field}: {dot}'.format(name=sn_name,
+                                                                                           field=field,
+                                                                                           dot=dot)
+
+
+
 class SNCurve():
     __photometry_dtype = [
         ('time', np.float),
@@ -102,50 +113,87 @@ class SNCurve():
     claimed_type: string or None
         SN claimed type, None if no claimed type is specified
     bands: set of strings
-        Photometric bands that are appeared in `photometry`.   
+        Photometric bands that are appeared in `photometry`.
+    has_spectra: bool
+        Is there spectral data in original json
+    
+    Raises
+    ------
+    BadPhotometryDataError
+        Raises if any used photometry field contains bad data  
     """.format(dtype=__photometry_dtype)
 
     def __init__(self, json_data, bands=None):
-        self._data = json_data
-        self._name = self._data['name']
+        self._json = json_data
+        self._name = self._json['name']
 
-        if 'claimedtype' in self._data:
-            self._claimed_type = self._data['claimedtype'][0]['value']  # TODO: examine other values
+        if 'claimedtype' in self._json:
+            self._claimed_type = self._json['claimedtype'][0]['value']  # TODO: examine other values
         else:
             self._claimed_type = None
 
         if bands is not None:
             bands = _transform_to_set(bands)
 
+        self.has_spectra = 'spectra' in self._json
+
         self.photometry = {}
-        for dot in self._data['photometry']:
+        for dot in self._json['photometry']:
             if 'time' in dot and 'band' in dot:
                 if (bands is not None) and (dot.get('band') not in bands):
                     continue
+
                 band_curve = self.photometry.setdefault(dot['band'], [])
+
+                if 'e_time' in dot:
+                    e_time = dot['e_time']
+                    if e_time < 0 or not np.isfinite(e_time):
+                        raise BadPhotometryDataError(self.name, dot, 'e_time')
+                else:
+                    e_time = np.nan
+
                 magn = float(dot['magnitude'])
                 flux = np.power(10, -0.4 * magn)
+                if not np.isfinite(flux):
+                    raise BadPhotometryDataError(self.name, dot)
+
                 if 'e_lower_magnitude' in dot and 'e_upper_magnitude' in dot:
-                    flux_lower = np.power(10, -0.4 * (magn + float(dot['e_lower_magnitude'])))
-                    flux_upper = np.power(10, -0.4 * (magn - float(dot['e_upper_magnitude'])))
+                    e_lower_magn = float(dot['e_lower_magnitude'])
+                    e_upper_magn = float(dot['e_upper_magnitude'])
+                    flux_lower = np.power(10, -0.4 * (magn + e_lower_magn))
+                    flux_upper = np.power(10, -0.4 * (magn - e_upper_magn))
                     e_flux = 0.5 * (flux_upper - flux_lower)
+                    if e_lower_magn < 0:
+                        raise BadPhotometryDataError(self.name, dot, 'e_lower_magnitude')
+                    if e_upper_magn < 0:
+                        raise BadPhotometryDataError(self.name, dot, 'e_upper_magnitude')
+                    if not np.isfinite(e_flux):
+                        raise BadPhotometryDataError(self.name, dot)
                 elif 'e_magnitude' in dot:
-                    e_flux = 0.4 * np.log(10) * flux * float(dot['e_magnitude'])
+                    e_magn = float(dot['e_magnitude'])
+                    e_flux = 0.4 * np.log(10) * flux * e_magn
+                    if e_magn < 0:
+                        raise BadPhotometryDataError(self.name, dot, 'e_magnitude')
+                    if not np.isfinite(e_flux):
+                        raise BadPhotometryDataError(self.name, dot)
                 else:
                     e_flux = np.nan
-                band_curve.append( (
+
+                band_curve.append((
                     dot['time'],
-                    dot.get('e_time', np.nan),
+                    e_time,
                     flux,
                     e_flux,
                     dot.get('upperlimit', False),
-                ) )
+                ))
         for k, v in self.photometry.items():
             v = self.photometry[k] = np.array(v, dtype=self.__photometry_dtype)
             if np.any(np.diff(v['time']) < 0):
                 logging.info('Original SN {} data for band {} contains unordered dots'.format(self._name, k))
                 v[:] = v[np.argsort(v['time'])]
             v.flags.writeable = False
+
+        self.ph = self.photometry
 
         self.bands = frozenset(self.photometry.keys())
 
