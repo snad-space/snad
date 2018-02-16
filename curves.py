@@ -7,19 +7,8 @@ from collections import Iterable
 
 import numpy as np
 import requests
-import six
 from six.moves import urllib
 from six.moves import UserList
-
-
-if six.PY2:
-    BAND_DTYPE = 'S8'
-    SN_TYPE_DTYPE = 'S8'
-elif six.PY3:
-    BAND_DTYPE = 'U8'
-    SN_TYPE_DTYPE = 'U8'
-else:
-    raise RuntimeError('Future guys, add a support of Python >3!')
 
 
 class SNFiles(UserList):
@@ -96,7 +85,7 @@ class SNCurve():
         ('e_time', np.float),
         ('flux', np.float),
         ('e_flux', np.float),
-        ('band', BAND_DTYPE),
+        ('isupperlimit', np.bool)
     ]
     __doc__ = """SN photometric data.
 
@@ -105,7 +94,7 @@ class SNCurve():
 
     Parameters
     ----------
-    photometry: numpy record array
+    photometry: dict {{str: numpy record array}}
         Photometric data in specified bands, dtype is
         `{dtype}` 
     name: string
@@ -128,37 +117,37 @@ class SNCurve():
         if bands is not None:
             bands = _transform_to_set(bands)
 
-        def photometry_generator():
-            for dot in self._data['photometry']:
-                if 'time' in dot and 'band' in dot and not dot.get('upperlimit', False):
-                    if (bands is not None) and (dot.get('band') not in bands):
-                        continue
-                    magn = float(dot['magnitude'])
-                    flux = np.power(10, -0.4*magn)
-                    if 'e_lower_magnitude' in dot and 'e_upper_magnitude' in dot:
-                        flux_lower = np.power(10, -0.4*(magn+float(dot['e_lower_magnitude'])))
-                        flux_upper = np.power(10, -0.4*(magn-float(dot['e_upper_magnitude'])))
-                        e_flux = 0.5 * (flux_upper - flux_lower)
-                    elif 'e_magnitude' in dot:
-                        e_flux = 0.4 * np.log(10) * flux * float(dot['e_magnitude'])
-                    else:
-                        e_flux = np.nan
-                    yield (
-                        dot['time'],
-                        dot.get('e_time', np.nan),
-                        flux,
-                        e_flux,
-                        dot['band'],
-                    )
+        self.photometry = {}
+        for dot in self._data['photometry']:
+            if 'time' in dot and 'band' in dot:
+                if (bands is not None) and (dot.get('band') not in bands):
+                    continue
+                band_curve = self.photometry.setdefault(dot['band'], [])
+                magn = float(dot['magnitude'])
+                flux = np.power(10, -0.4 * magn)
+                if 'e_lower_magnitude' in dot and 'e_upper_magnitude' in dot:
+                    flux_lower = np.power(10, -0.4 * (magn + float(dot['e_lower_magnitude'])))
+                    flux_upper = np.power(10, -0.4 * (magn - float(dot['e_upper_magnitude'])))
+                    e_flux = 0.5 * (flux_upper - flux_lower)
+                elif 'e_magnitude' in dot:
+                    e_flux = 0.4 * np.log(10) * flux * float(dot['e_magnitude'])
+                else:
+                    e_flux = np.nan
+                band_curve.append( (
+                    dot['time'],
+                    dot.get('e_time', np.nan),
+                    flux,
+                    e_flux,
+                    dot.get('upperlimit', False),
+                ) )
+        for k, v in self.photometry.items():
+            v = self.photometry[k] = np.array(v, dtype=self.__photometry_dtype)
+            if np.any(np.diff(v['time']) < 0):
+                logging.info('Original SN {} data for band {} contains unordered dots'.format(self._name, k))
+                v[:] = v[np.argsort(v['time'])]
+            v.flags.writeable = False
 
-        self.photometry = np.fromiter(photometry_generator(), dtype=self.__photometry_dtype)
-        # All photometry dates should be sorted, so it is cheaper to check it than sort every time:
-        if np.any(np.diff(self.photometry['time']) < 0):
-            logging.warning('SN {} data contains unordered dots'.format(self._name))
-            self.photometry[:] = self.photometry[np.argsort(self.photometry['time'])]
-        self.photometry.flags.writeable = False
-
-        self.bands = frozenset(self.photometry['band'])
+        self.bands = frozenset(self.photometry.keys())
 
     # def spline(self, band=None, delta_mag=0.01, k=3):
     #     if band is None:
