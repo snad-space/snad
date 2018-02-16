@@ -75,7 +75,8 @@ class ReadLightCurvesFromJsonTestCase(unittest.TestCase):
         self.sn_files = SNFiles(SNS_ALL)
 
     def read_file(self, fname):
-        SNCurve.from_json(fname)
+        curve = SNCurve.from_json(fname)
+        self.assertTrue(curve == curve.photometry)
 
     def test_download_and_read(self):
         for fname in self.sn_files.filepaths:
@@ -89,7 +90,7 @@ class UpperLimitTestCase(unittest.TestCase):
     def test_has_upper_limit(self):
         for curve in self.curves:
             has_upper_limit = reduce(operator.__or__,
-                                     (np.any(lc['isupperlimit']) for lc in curve.photometry.values()))
+                                     (np.any(lc['isupperlimit']) for lc in curve.values()))
             self.assertTrue(has_upper_limit, 'SN {} light curves should have upper limit dots')
 
 
@@ -112,7 +113,7 @@ class TemporalOrderTestCase(unittest.TestCase):
     def test_order(self):
         for fpath in self.sn_files.filepaths:
             curve = SNCurve.from_json(fpath)
-            for lc in curve.photometry.values():
+            for lc in curve.values():
                 self.assertTrue(np.all(np.diff(lc['time']) >= 0))
 
     @unittest.skipIf(six.PY2, 'Logging testing is missed in Python 2')

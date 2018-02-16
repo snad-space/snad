@@ -89,8 +89,7 @@ class BadPhotometryDataError(ValueError):
                                                                                            dot=dot)
 
 
-
-class SNCurve():
+class SNCurve(dict):
     __photometry_dtype = [
         ('time', np.float),
         ('e_time', np.float),
@@ -112,7 +111,7 @@ class SNCurve():
         SN name.
     claimed_type: string or None
         SN claimed type, None if no claimed type is specified
-    bands: set of strings
+    bands: frozenset of strings
         Photometric bands that are appeared in `photometry`.
     has_spectra: bool
         Is there spectral data in original json
@@ -124,6 +123,8 @@ class SNCurve():
     """.format(dtype=__photometry_dtype)
 
     def __init__(self, json_data, bands=None):
+        super(SNCurve, self).__init__()
+
         self._json = json_data
         self._name = self._json['name']
 
@@ -137,13 +138,13 @@ class SNCurve():
 
         self.has_spectra = 'spectra' in self._json
 
-        self.photometry = {}
+        self.ph = self.photometry = self
         for dot in self._json['photometry']:
             if 'time' in dot and 'band' in dot:
                 if (bands is not None) and (dot.get('band') not in bands):
                     continue
 
-                band_curve = self.photometry.setdefault(dot['band'], [])
+                band_curve = self.setdefault(dot['band'], [])
 
                 if 'e_time' in dot:
                     e_time = dot['e_time']
@@ -186,16 +187,14 @@ class SNCurve():
                     e_flux,
                     dot.get('upperlimit', False),
                 ))
-        for k, v in self.photometry.items():
-            v = self.photometry[k] = np.array(v, dtype=self.__photometry_dtype)
+        for k, v in self.items():
+            v = self[k] = np.array(v, dtype=self.__photometry_dtype)
             if np.any(np.diff(v['time']) < 0):
                 logging.info('Original SN {} data for band {} contains unordered dots'.format(self._name, k))
                 v[:] = v[np.argsort(v['time'])]
             v.flags.writeable = False
 
-        self.ph = self.photometry
-
-        self.bands = frozenset(self.photometry.keys())
+        self.bands = frozenset(self.keys())
 
     # def spline(self, band=None, delta_mag=0.01, k=3):
     #     if band is None:
@@ -272,9 +271,6 @@ class SNCurve():
         else:
             data = data[snname]
         return cls(data, **kwargs)
-
-    def __repr__(self):
-        return repr(self.photometry)
 
     @property
     def name(self):
