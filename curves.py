@@ -79,7 +79,17 @@ def _transform_to_set(value):
     return set(value)
 
 
-class SNCurve():
+class BadPhotometryDataError(ValueError):
+    def __init__(self, sn_name, dot, field=None):
+        if field is None:
+            self.message = 'SN {name} has a bad photometry item {dot}'.format(name=sn_name, dot=dot)
+        else:
+            self.message = 'SN {name} has a photometry item with bad {field}: {dot}'.format(name=sn_name,
+                                                                                           field=field,
+                                                                                           dot=dot)
+
+
+class SNCurve(dict):
     __photometry_dtype = [
         ('time', np.float),
         ('e_time', np.float),
@@ -101,102 +111,90 @@ class SNCurve():
         SN name.
     claimed_type: string or None
         SN claimed type, None if no claimed type is specified
-    bands: set of strings
-        Photometric bands that are appeared in `photometry`.   
+    bands: frozenset of strings
+        Photometric bands that are appeared in `photometry`.
+    has_spectra: bool
+        Is there spectral data in original json
+    
+    Raises
+    ------
+    BadPhotometryDataError
+        Raises if any used photometry field contains bad data  
     """.format(dtype=__photometry_dtype)
 
     def __init__(self, json_data, bands=None):
-        self._data = json_data
-        self._name = self._data['name']
+        super(SNCurve, self).__init__()
 
-        if 'claimedtype' in self._data:
-            self._claimed_type = self._data['claimedtype'][0]['value']  # TODO: examine other values
+        self._json = json_data
+        self._name = self._json['name']
+
+        if 'claimedtype' in self._json:
+            self._claimed_type = self._json['claimedtype'][0]['value']  # TODO: examine other values
         else:
             self._claimed_type = None
 
         if bands is not None:
             bands = _transform_to_set(bands)
 
-        self.photometry = {}
-        for dot in self._data['photometry']:
+        self._has_spectra = 'spectra' in self._json
+
+        self.ph = self.photometry = self
+        for dot in self._json['photometry']:
             if 'time' in dot and 'band' in dot:
                 if (bands is not None) and (dot.get('band') not in bands):
                     continue
-                band_curve = self.photometry.setdefault(dot['band'], [])
+
+                band_curve = self.setdefault(dot['band'], [])
+
+                if 'e_time' in dot:
+                    e_time = dot['e_time']
+                    if e_time < 0 or not np.isfinite(e_time):
+                        raise BadPhotometryDataError(self.name, dot, 'e_time')
+                else:
+                    e_time = np.nan
+
                 magn = float(dot['magnitude'])
                 flux = np.power(10, -0.4 * magn)
+                if not np.isfinite(flux):
+                    raise BadPhotometryDataError(self.name, dot)
+
                 if 'e_lower_magnitude' in dot and 'e_upper_magnitude' in dot:
-                    flux_lower = np.power(10, -0.4 * (magn + float(dot['e_lower_magnitude'])))
-                    flux_upper = np.power(10, -0.4 * (magn - float(dot['e_upper_magnitude'])))
+                    e_lower_magn = float(dot['e_lower_magnitude'])
+                    e_upper_magn = float(dot['e_upper_magnitude'])
+                    flux_lower = np.power(10, -0.4 * (magn + e_lower_magn))
+                    flux_upper = np.power(10, -0.4 * (magn - e_upper_magn))
                     e_flux = 0.5 * (flux_upper - flux_lower)
+                    if e_lower_magn < 0:
+                        raise BadPhotometryDataError(self.name, dot, 'e_lower_magnitude')
+                    if e_upper_magn < 0:
+                        raise BadPhotometryDataError(self.name, dot, 'e_upper_magnitude')
+                    if not np.isfinite(e_flux):
+                        raise BadPhotometryDataError(self.name, dot)
                 elif 'e_magnitude' in dot:
-                    e_flux = 0.4 * np.log(10) * flux * float(dot['e_magnitude'])
+                    e_magn = float(dot['e_magnitude'])
+                    e_flux = 0.4 * np.log(10) * flux * e_magn
+                    if e_magn < 0:
+                        raise BadPhotometryDataError(self.name, dot, 'e_magnitude')
+                    if not np.isfinite(e_flux):
+                        raise BadPhotometryDataError(self.name, dot)
                 else:
                     e_flux = np.nan
-                band_curve.append( (
+
+                band_curve.append((
                     dot['time'],
-                    dot.get('e_time', np.nan),
+                    e_time,
                     flux,
                     e_flux,
                     dot.get('upperlimit', False),
-                ) )
-        for k, v in self.photometry.items():
-            v = self.photometry[k] = np.array(v, dtype=self.__photometry_dtype)
+                ))
+        for k, v in self.items():
+            v = self[k] = np.array(v, dtype=self.__photometry_dtype)
             if np.any(np.diff(v['time']) < 0):
                 logging.info('Original SN {} data for band {} contains unordered dots'.format(self._name, k))
                 v[:] = v[np.argsort(v['time'])]
             v.flags.writeable = False
 
-        self.bands = frozenset(self.photometry.keys())
-
-    # def spline(self, band=None, delta_mag=0.01, k=3):
-    #     if band is None:
-    #         if len(self.bands) > 1:
-    #             raise ValueError('Please, specify band, because len(self.bands) > 1')
-    #         else:
-    #             band = self.bands.copy().pop()
-    #     photo_in_band = self.photometry[self.photometry['band']==band]
-    #
-    #     if photo_in_band.shape[0] < k+1:
-    #         return np.zeros_like
-    #
-    #     epsilon_flux = 1. - 10.**(-0.4 * delta_mag)
-    #     flux = np.power(10., -0.4 * photo_in_band['mag'])
-    #     weight = 1. / (epsilon_flux * flux)
-    #     time = photo_in_band['time'] - photo_in_band['time'][flux.argmax()]
-    #     # spline = interpolate.interp1d(time, flux,
-    #     #                               copy=False,
-    #     #                               bounds_error=False, fill_value=0,
-    #     #                               kind='cubic')
-    #     test_time = np.average(time)
-    #     max_flux_gradient = None
-    #     s = time.shape[0] / 2.
-    #     while True:
-    #         s *= 2
-    #         spline = interpolate.UnivariateSpline(time, flux, w=weight, s=s, k=k, ext='zeros')
-    #         # Check the smoothing spline is self-constistent
-    #         if spline.get_residual() > s:
-    #             continue
-    #         # Check if one value of the spline is NaN
-    #         if np.isnan(spline(test_time)):
-    #             continue
-    #         # Check if any values in interpolated dots are NaN
-    #         if np.any(np.isnan(spline(time))):
-    #             continue
-    #         derivatives = spline.derivative()(time)
-    #         # Check if any derivatives in interpolated dots are NaN
-    #         if np.any(np.isnan(derivatives)):
-    #             continue
-    #         if max_flux_gradient is None:
-    #             flux_gradient = np.gradient(flux, np.gradient(time))
-    #             flux_gradient[np.isinf(flux_gradient)] = 0
-    #             max_flux_gradient = np.max(np.abs(flux_gradient))
-    #         # Check if any derivative is too steep
-    #         if np.any(np.abs(derivatives[k-1:1-k]) > max_flux_gradient):
-    #             continue
-    #         break
-    #
-    #     return spline
+        self.bands = frozenset(self.keys())
 
     @classmethod
     def from_json(cls, filename, snname=None, **kwargs):
@@ -225,9 +223,6 @@ class SNCurve():
             data = data[snname]
         return cls(data, **kwargs)
 
-    def __repr__(self):
-        return repr(self.photometry)
-
     @property
     def name(self):
         return self._name
@@ -236,34 +231,6 @@ class SNCurve():
     def claimed_type(self):
         return self._claimed_type
 
-
-# class SNDataForLearning(SNFiles):
-#     def __init__(self, *args, bands=None, **kwargs):
-#         super().__init__(*args, **kwargs)
-#
-#         self.curves = []
-#         for i, filepath in enumerate(self.filepaths):
-#             self.curves.append(SNCurve.from_json(filepath, snname=self[i], bands=bands))
-#
-#         if bands is None:
-#             self.bands = sorted(set(chain.from_iterable(curve.photometry['band'] for curve in self.curves)))
-#         else:
-#             self.bands = bands
-#
-#     def X_y(self, n_dots=100, time_interval=(-50, 350), normalize_flux=True):
-#         self.n_dots = n_dots
-#         self.time_interval = time_interval
-#
-#         self.time_dots = np.linspace(*self.time_interval, self.n_dots)
-#
-#         self.X = np.empty((len(self.curves), n_dots * len(self.bands)), dtype=np.float)
-#         self.y = np.fromiter( [curve.claimedtype for curve in self.curves], dtype=SN_TYPE_DTYPE, count=len(self.curves) )
-#         for i_curve, curve in enumerate(self.curves):
-#             for i_band, band in enumerate(self.bands):
-#                 dots = curve.spline(band)(self.time_dots)
-#                 if normalize_flux:
-#                     dots /= dots.max()
-#                 self.X[i_curve, i_band * n_dots:(i_band + 1) * n_dots] = dots
-#
-#         return self.X, self.y
-
+    @property
+    def has_spectra(self):
+        return self._has_spectra
