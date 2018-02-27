@@ -70,6 +70,13 @@ class DownloadTestCase(unittest.TestCase):
             self.run_test_for_sns(fd.name)
 
 
+class SNFilesReprTestCase(unittest.TestCase):
+    def test_repr(self):
+        sn_files = SNFiles(SNS_ALL)
+        assertRegexp = self.assertRegexpMatches if six.PY2 else self.assertRegex
+        assertRegexp(repr(sn_files), r'SN names:.+')
+
+
 class ReadLightCurvesFromJsonTestCase(unittest.TestCase):
     def setUp(self):
         self.sn_files = SNFiles(SNS_ALL)
