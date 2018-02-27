@@ -55,7 +55,7 @@ class SNFiles(UserList):
                         fd.write(chunk)
 
     def __repr__(self):
-        return 'SN names: {sns}\nFiles: {fns}\nURLs: {urls}'.format(sns=super().__repr__(),
+        return 'SN names: {sns}\nFiles: {fns}\nURLs: {urls}'.format(sns=super(SNFiles, self).__repr__(),
                                                                     fns=repr(self.filepaths),
                                                                     urls=repr(self.urls))
 
@@ -85,8 +85,8 @@ class BadPhotometryDataError(ValueError):
             self.message = 'SN {name} has a bad photometry item {dot}'.format(name=sn_name, dot=dot)
         else:
             self.message = 'SN {name} has a photometry item with bad {field}: {dot}'.format(name=sn_name,
-                                                                                           field=field,
-                                                                                           dot=dot)
+                                                                                            field=field,
+                                                                                            dot=dot)
 
 
 class SNCurve(dict):
