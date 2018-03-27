@@ -61,7 +61,7 @@ class SNFiles(UserList):
 
     @staticmethod
     def _names_from_csvfile(filename):
-        """Get SN names from the `Name` column of CSV file. Such the file can
+        """Get SN names from the `Name` column of CSV file. Such a file can
         be obtained from https://sne.space"""
         from pandas import read_csv
         data = read_csv(filename)
@@ -234,3 +234,9 @@ class SNCurve(dict):
     @property
     def has_spectra(self):
         return self._has_spectra
+
+
+def get_SN_curve(name):
+    sn_files = SNFiles([name])
+    curve = SNCurve.from_json(sn_files.filepaths[0])
+    return curve
