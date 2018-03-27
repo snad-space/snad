@@ -2,3 +2,4 @@ six
 numpy
 requests
 pandas
+cached-property

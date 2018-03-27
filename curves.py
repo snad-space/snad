@@ -3,10 +3,11 @@ from __future__ import division
 import json
 import logging
 import os, os.path
-from collections import Iterable
+from collections import Iterable, namedtuple
 
 import numpy as np
 import requests
+from cached_property import cached_property
 from six.moves import urllib
 from six.moves import UserList
 
@@ -122,6 +123,8 @@ class SNCurve(dict):
         Raises if any used photometry field contains bad data  
     """.format(dtype=__photometry_dtype)
 
+    TrainingData = namedtuple('TrainingData', ('X', 'y', 'y_err', 'y_norm'))
+
     def __init__(self, json_data, bands=None):
         super(SNCurve, self).__init__()
 
@@ -194,7 +197,42 @@ class SNCurve(dict):
                 v[:] = v[np.argsort(v['time'])]
             v.flags.writeable = False
 
-        self.bands = frozenset(self.keys())
+        self.bands = tuple(sorted(self.keys()))
+
+    def training_data(self, with_upper_limits=False, with_inf_e_flux=False):
+        if with_upper_limits and with_inf_e_flux:
+            ph = self
+        else:
+            ph = {
+                band: self[band][(np.logical_not(self[band]['isupperlimit']) + with_upper_limits)
+                                 & (np.isfinite(self[band]['e_flux']) + with_inf_e_flux)]
+                for band in self.bands
+            }
+        X = np.block(list(
+                [np.full_like(ph[band]['time'], i).reshape(-1,1), ph[band]['time'].reshape(-1,1)]
+                for i, band in enumerate(self.bands)
+        ))
+        y = np.hstack((ph[band]['flux'] for band in self.bands))
+        y_norm = y.std()
+        y /= y_norm
+        y_err = np.hstack((ph[band]['e_flux'] for band in self.bands)) / y_norm
+        return self.TrainingData(X=X, y=y, y_err=y_err, y_norm=y_norm)
+
+    @cached_property
+    def X(self):
+        return self.training_data(with_upper_limits=False, with_inf_e_flux=False).X
+
+    @cached_property
+    def y(self):
+        return self.training_data(with_upper_limits=False, with_inf_e_flux=False).y
+
+    @cached_property
+    def y_err(self):
+        return self.training_data(with_upper_limits=False, with_inf_e_flux=False).y_err
+
+    @cached_property
+    def y_norm(self):
+        return self.training_data(with_upper_limits=False, with_inf_e_flux=False).y_norm
 
     @classmethod
     def from_json(cls, filename, snname=None, **kwargs):
@@ -223,6 +261,21 @@ class SNCurve(dict):
             data = data[snname]
         return cls(data, **kwargs)
 
+    @classmethod
+    def from_name(cls, snname, path=None, **kwargs):
+        """Load photometric data by SN name, data may be downloaded
+
+        Parameters
+        ----------
+        snname: string
+            sne.space SN name
+        path: string or None, optional
+            Specifies local path of json data, for default see `SNFiles`
+        """
+        sn_files = SNFiles([snname], path=path)
+        kwargs['snname'] = snname
+        return cls.from_json(sn_files.filepaths[0], **kwargs)
+
     @property
     def name(self):
         return self._name
@@ -235,8 +288,3 @@ class SNCurve(dict):
     def has_spectra(self):
         return self._has_spectra
 
-
-def get_SN_curve(name):
-    sn_files = SNFiles([name])
-    curve = SNCurve.from_json(sn_files.filepaths[0])
-    return curve

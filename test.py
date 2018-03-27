@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import json
 import logging
 import operator
 import os.path
@@ -11,9 +12,12 @@ from tempfile import NamedTemporaryFile
 import numpy as np
 import pandas
 import six
+from numpy.testing import assert_allclose, assert_equal
 
 from curves import SNCurve, SNFiles
 
+
+TEST_JSON_PATH = 'test.json'
 
 SNS_NO_CMAIMED_TYPE = {
     'SNLS-03D3ce',
@@ -129,3 +133,24 @@ class TemporalOrderTestCase(unittest.TestCase):
             with self.assertLogs(level=logging.INFO):
                curve = SNCurve.from_json(fpath)
             del curve
+
+
+class LightCurveLearningDataTestCase(unittest.TestCase):
+    def setUp(self):
+        with open(TEST_JSON_PATH) as fp:
+            self.json_data = json.load(fp)['test']
+        self.time = np.arange(0, 70, 10)
+        self.u_magn = np.r_[5:-1:-3,-1:6.5:1.5]
+
+    def test_X_U(self):
+        curve = SNCurve(self.json_data, bands='U')
+        assert_equal(curve.X, np.stack((np.zeros_like(self.time), self.time), axis=1))
+
+    def test_X_states(self):
+        curve = SNCurve(self.json_data)
+        assert_equal(curve.X[:len(self.time),0], np.zeros_like(self.time))
+        assert_equal(curve.X[len(self.time):,0], np.ones_like(self.time))
+
+    def test_y_U(self):
+        curve = SNCurve(self.json_data, bands='U')
+        assert_allclose(-2.5*np.log10(curve.y*curve.y_norm), self.u_magn)

@@ -1,0 +1,92 @@
+{
+	"test": {
+		"schema": "https://github.com/astrocatalogs/supernovae/blob/5d080fc/SCHEMA.md",
+		"name": "test",
+		"photometry": [
+			{
+				"time": "0",
+				"band": "U",
+				"e_magnitude": "0.1",
+				"magnitude": "5.0"
+			},
+			{
+				"time": "0",
+				"band": "B",
+				"e_magnitude": "0.1",
+				"magnitude": "3.0"
+			},
+			{
+				"time": "10",
+				"band": "U",
+				"e_magnitude": "0.1",
+				"magnitude": "2.0"
+			},
+			{
+				"time": "10",
+				"band": "B",
+				"e_magnitude": "0.1",
+				"magnitude": "0.0"
+			},
+			{
+				"time": "20",
+				"band": "U",
+				"e_magnitude": "0.1",
+				"magnitude": "-1.0"
+			},
+			{
+				"time": "20",
+				"band": "B",
+				"e_magnitude": "0.1",
+				"magnitude": "-3.0"
+			},
+			{
+				"time": "30",
+				"band": "U",
+				"e_magnitude": "0.1",
+				"magnitude": "0.5"
+			},
+			{
+				"time": "30",
+				"band": "B",
+				"e_magnitude": "0.1",
+				"magnitude": "-1.5"
+			},
+			{
+				"time": "40",
+				"band": "U",
+				"e_magnitude": "0.1",
+				"magnitude": "2.0"
+			},
+			{
+				"time": "40",
+				"band": "B",
+				"e_magnitude": "0.1",
+				"magnitude": "0.0"
+			},
+			{
+				"time": "50",
+				"band": "U",
+				"e_magnitude": "0.1",
+				"magnitude": "3.5"
+			},
+			{
+				"time": "50",
+				"band": "B",
+				"e_magnitude": "0.1",
+				"magnitude": "1.5"
+			},
+			{
+				"time": "60",
+				"band": "U",
+				"e_magnitude": "0.1",
+				"magnitude": "5.0"
+			},
+			{
+				"time": "60",
+				"band": "B",
+				"e_magnitude": "0.1",
+				"magnitude": "3.0"
+			}
+		]
+	}
+}
