@@ -2,4 +2,4 @@ six
 numpy
 requests
 pandas
-cached-property
+cachetools ; python_version < '3.2'

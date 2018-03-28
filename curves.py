@@ -7,9 +7,15 @@ from collections import Iterable, Mapping, namedtuple, OrderedDict
 
 import numpy as np
 import requests
-from cached_property import cached_property
+import six
+from six import iteritems, iterkeys
 from six.moves import urllib
 from six.moves import UserList
+
+if six.PY2:
+    from cachetools.func import lru_cache
+else:
+    from functools import lru_cache
 
 
 class SNFiles(UserList):
@@ -93,20 +99,27 @@ class BadPhotometryDataError(ValueError):
                                                                                             dot=dot)
 
 
-class DataWithStates(Mapping):
+class FrozenOrderedDict(Mapping):
     def __init__(self, *args, **kwargs):
-        self.__d = OrderedDict(*args, **kwargs)
-        self.__hash = None
+        self._d = OrderedDict(*args, **kwargs)
+        self._hash = None
 
     def __iter__(self):
-        return iter(self.__d)
+        return iter(self._d)
 
     def __len__(self):
-        return len(self.__d)
+        return len(self._d)
+
+    def __getitem__(self, item):
+        return self._d[item]
+
+    def __hash__(self):
+        if self._hash is None:
+            self._hash = hash(iteritems(self._d))
+        return self._hash
 
 
-
-class SNCurve(dict):
+class SNCurve(FrozenOrderedDict):
     __photometry_dtype = [
         ('time', np.float),
         ('e_time', np.float),
@@ -142,7 +155,7 @@ class SNCurve(dict):
     ScikitLearnData = namedtuple('ScikitLearnData', ('X', 'y', 'y_err', 'y_norm'))
 
     def __init__(self, json_data, bands=None):
-        super(SNCurve, self).__init__()
+        d = dict()
 
         self._json = json_data
         self._name = self._json['name']
@@ -166,7 +179,7 @@ class SNCurve(dict):
                 if (bands is not None) and (dot.get('band') not in bands_set):
                     continue
 
-                band_curve = self.setdefault(dot['band'], [])
+                band_curve = d.setdefault(dot['band'], [])
 
                 if 'e_time' in dot:
                     e_time = dot['e_time']
@@ -209,16 +222,18 @@ class SNCurve(dict):
                     e_flux,
                     dot.get('upperlimit', False),
                 ))
-        for k, v in self.items():
-            v = self[k] = np.array(v, dtype=self.__photometry_dtype)
+        for k, v in iteritems(d):
+            v = d[k] = np.array(v, dtype=self.__photometry_dtype)
             if np.any(np.diff(v['time']) < 0):
                 logging.info('Original SN {} data for band {} contains unordered dots'.format(self._name, k))
                 v[:] = v[np.argsort(v['time'])]
             v.flags.writeable = False
 
         if bands is None:
-            bands = tuple(sorted(self.keys()))
+            bands = tuple(sorted(iterkeys(d)))
         self.bands = bands
+
+        super(SNCurve, self).__init__(((band, d[band]) for band in self.bands))
 
     @classmethod
     def from_json(cls, filename, snname=None, **kwargs):
@@ -293,7 +308,8 @@ class SNCurve(dict):
         y_err = np.hstack((ph[band]['e_flux'] for band in self.bands)) / y_norm
         return self.ScikitLearnData(X=X, y=y, y_err=y_err, y_norm=y_norm)
 
-    @cached_property
+    @property
+    @lru_cache(maxsize=1)
     def _Xy(self):
         return self.scikit_learn_data(with_upper_limits=False, with_inf_e_flux=False)
 
