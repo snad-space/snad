@@ -3,7 +3,7 @@ from __future__ import division
 import json
 import logging
 import os, os.path
-from collections import Iterable, namedtuple
+from collections import Iterable, Mapping, namedtuple, OrderedDict
 
 import numpy as np
 import requests
@@ -93,6 +93,19 @@ class BadPhotometryDataError(ValueError):
                                                                                             dot=dot)
 
 
+class DataWithStates(Mapping):
+    def __init__(self, *args, **kwargs):
+        self.__d = OrderedDict(*args, **kwargs)
+        self.__hash = None
+
+    def __iter__(self):
+        return iter(self.__d)
+
+    def __len__(self):
+        return len(self.__d)
+
+
+
 class SNCurve(dict):
     __photometry_dtype = [
         ('time', np.float),
@@ -141,7 +154,9 @@ class SNCurve(dict):
 
         if bands is not None:
             bands = _transform_to_tuple(bands)
-        bands_set = set(bands)
+            bands_set = set(bands)
+        else:
+            bands_set = set()
 
         self._has_spectra = 'spectra' in self._json
 
