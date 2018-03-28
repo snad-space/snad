@@ -19,10 +19,14 @@ if __name__ == '__main__':
     rbf3 = kernels.RBF(length_scale=1.0, length_scale_bounds=(1e-2, 1e2))
     white1 = kernels.WhiteKernel(noise_level=1.0, noise_level_bounds='fixed')
     white2 = kernels.WhiteKernel(noise_level=1.0, noise_level_bounds='fixed')
-    msk = MultiStateKernel((rbf1, rbf2, white1), np.array([[1,0.5,0.],[0.5,1,0.],[0.5,0.5,1]]), [np.array([[1e-2,-10,-10],[-10,1e-2,-10],[-10,-10,-100]]), np.array([[1e2,10,10],[10,1e2,10],[10,10,1e2]])])
+    msk = MultiStateKernel(
+        (rbf1, rbf2, white1),
+        np.array([[1,0.5,0.],[0.5,1,0.],[0.5,0.5,1]]),
+        [np.array([[1e-2,-10,-10],[-10,1e-2,-10],[-10,-10,-100]]), np.array([[1e2,10,10],[10,1e2,10],[10,10,1e2]])]
+    )
 
     t_ = np.r_[curve.X[:,1].min():curve.X[:,1].max():101j]
-    x_ = np.block([[np.zeros_like(t_), np.ones_like(t_), np.full_like(t_,2)], [t_, t_, t_]]).T
+    x_ = np.block([[np.full_like(t_,0), np.full_like(t_, 1), np.full_like(t_,2)], [t_, t_, t_]]).T
 
     gpr1 = GaussianProcessRegressor(1*rbf1, alpha=curve_i.y_err**2)
     gpr2 = GaussianProcessRegressor(1*rbf1, alpha=curve_r.y_err**2)

@@ -141,7 +141,7 @@ class SNCurve(dict):
 
         if bands is not None:
             bands = _transform_to_tuple(bands)
-            bands_set = set(bands)
+        bands_set = set(bands)
 
         self._has_spectra = 'spectra' in self._json
 
@@ -259,7 +259,6 @@ class SNCurve(dict):
     def has_spectra(self):
         return self._has_spectra
 
-    # @lru_cache(maxsize=4)
     def scikit_learn_data(self, with_upper_limits=False, with_inf_e_flux=False):
         if with_upper_limits and with_inf_e_flux:
             ph = self
