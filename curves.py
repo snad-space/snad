@@ -328,3 +328,8 @@ class SNCurve(FrozenOrderedDict):
     @property
     def y_norm(self):
         return self._Xy.y_norm
+
+    def __repr__(self):
+        return 'SN {} with claimed type {}. Photometry data:\n{}'.format(
+            self.name, self.claimed_type, repr(self._d)
+        )
