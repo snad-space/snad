@@ -35,7 +35,10 @@ class SNFiles(UserList):
 
         self._filenames = list( x + '.json' for x in self )
         self.filepaths = list( os.path.join(os.path.abspath(self._path), x) for x in self._filenames )
-        self.urls = list( urllib.parse.urljoin(self._baseurl, urllib.parse.quote(x)) for x in self._filenames )
+        self.urls = list(
+            urllib.parse.urljoin(self._baseurl, urllib.parse.quote(x))
+            for x in self._filenames
+        )
 
         self._download(nocache=nocache)
 
@@ -69,7 +72,7 @@ class SNFiles(UserList):
         return data.Name.as_matrix()
 
 
-def _transform_to_set(value):
+def _transform_to_tuple(value):
     """If `value` is a string contained comma separated spaceless sub-strings,
     these sub-strings are putted into set, other iterable will putted into set
     unmodified.
@@ -77,7 +80,7 @@ def _transform_to_set(value):
     if isinstance(value, str):
         value = value.replace(' ', '')
         value = value.split(',')
-    return set(value)
+    return tuple(value)
 
 
 class BadPhotometryDataError(ValueError):
@@ -123,7 +126,7 @@ class SNCurve(dict):
         Raises if any used photometry field contains bad data  
     """.format(dtype=__photometry_dtype)
 
-    TrainingData = namedtuple('TrainingData', ('X', 'y', 'y_err', 'y_norm'))
+    ScikitLearnData = namedtuple('ScikitLearnData', ('X', 'y', 'y_err', 'y_norm'))
 
     def __init__(self, json_data, bands=None):
         super(SNCurve, self).__init__()
@@ -137,14 +140,15 @@ class SNCurve(dict):
             self._claimed_type = None
 
         if bands is not None:
-            bands = _transform_to_set(bands)
+            bands = _transform_to_tuple(bands)
+            bands_set = set(bands)
 
         self._has_spectra = 'spectra' in self._json
 
         self.ph = self.photometry = self
         for dot in self._json['photometry']:
             if 'time' in dot and 'band' in dot:
-                if (bands is not None) and (dot.get('band') not in bands):
+                if (bands is not None) and (dot.get('band') not in bands_set):
                     continue
 
                 band_curve = self.setdefault(dot['band'], [])
@@ -197,42 +201,9 @@ class SNCurve(dict):
                 v[:] = v[np.argsort(v['time'])]
             v.flags.writeable = False
 
-        self.bands = tuple(sorted(self.keys()))
-
-    def training_data(self, with_upper_limits=False, with_inf_e_flux=False):
-        if with_upper_limits and with_inf_e_flux:
-            ph = self
-        else:
-            ph = {
-                band: self[band][(np.logical_not(self[band]['isupperlimit']) + with_upper_limits)
-                                 & (np.isfinite(self[band]['e_flux']) + with_inf_e_flux)]
-                for band in self.bands
-            }
-        X = np.block(list(
-                [np.full_like(ph[band]['time'], i).reshape(-1,1), ph[band]['time'].reshape(-1,1)]
-                for i, band in enumerate(self.bands)
-        ))
-        y = np.hstack((ph[band]['flux'] for band in self.bands))
-        y_norm = y.std()
-        y /= y_norm
-        y_err = np.hstack((ph[band]['e_flux'] for band in self.bands)) / y_norm
-        return self.TrainingData(X=X, y=y, y_err=y_err, y_norm=y_norm)
-
-    @cached_property
-    def X(self):
-        return self.training_data(with_upper_limits=False, with_inf_e_flux=False).X
-
-    @cached_property
-    def y(self):
-        return self.training_data(with_upper_limits=False, with_inf_e_flux=False).y
-
-    @cached_property
-    def y_err(self):
-        return self.training_data(with_upper_limits=False, with_inf_e_flux=False).y_err
-
-    @cached_property
-    def y_norm(self):
-        return self.training_data(with_upper_limits=False, with_inf_e_flux=False).y_norm
+        if bands is None:
+            bands = tuple(sorted(self.keys()))
+        self.bands = bands
 
     @classmethod
     def from_json(cls, filename, snname=None, **kwargs):
@@ -288,3 +259,42 @@ class SNCurve(dict):
     def has_spectra(self):
         return self._has_spectra
 
+    # @lru_cache(maxsize=4)
+    def scikit_learn_data(self, with_upper_limits=False, with_inf_e_flux=False):
+        if with_upper_limits and with_inf_e_flux:
+            ph = self
+        else:
+            ph = {
+                band: self[band][(np.logical_not(self[band]['isupperlimit']) + with_upper_limits)
+                                 & (np.isfinite(self[band]['e_flux']) + with_inf_e_flux)]
+                for band in self.bands
+            }
+        X = np.block(list(
+                [np.full_like(ph[band]['time'], i).reshape(-1,1), ph[band]['time'].reshape(-1,1)]
+                for i, band in enumerate(self.bands)
+        ))
+        y = np.hstack((ph[band]['flux'] for band in self.bands))
+        y_norm = y.std() or y.max()
+        y /= y_norm
+        y_err = np.hstack((ph[band]['e_flux'] for band in self.bands)) / y_norm
+        return self.ScikitLearnData(X=X, y=y, y_err=y_err, y_norm=y_norm)
+
+    @cached_property
+    def _Xy(self):
+        return self.scikit_learn_data(with_upper_limits=False, with_inf_e_flux=False)
+
+    @property
+    def X(self):
+        return self._Xy.X
+
+    @property
+    def y(self):
+        return self._Xy.y
+
+    @property
+    def y_err(self):
+        return self._Xy.y_err
+
+    @property
+    def y_norm(self):
+        return self._Xy.y_norm

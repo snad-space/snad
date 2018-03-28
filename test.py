@@ -131,7 +131,7 @@ class TemporalOrderTestCase(unittest.TestCase):
     def test_unordered_logging(self):
         for fpath in self.sn_files.filepaths:
             with self.assertLogs(level=logging.INFO):
-               curve = SNCurve.from_json(fpath)
+                curve = SNCurve.from_json(fpath)
             del curve
 
 

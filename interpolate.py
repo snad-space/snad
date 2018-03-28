@@ -26,12 +26,16 @@ if __name__ == '__main__':
 
     gpr1 = GaussianProcessRegressor(1*rbf1, alpha=curve_i.y_err**2)
     gpr2 = GaussianProcessRegressor(1*rbf1, alpha=curve_r.y_err**2)
+    gpr3 = GaussianProcessRegressor(1*rbf1, alpha=curve_z.y_err**2)
     gpr1.fit(curve_i.X[:,1].reshape(-1,1), curve_i.y)
     gpr2.fit(curve_r.X[:,1].reshape(-1,1), curve_r.y)
+    # gpr3.fit(curve_z.X[:,1].reshape(-1,1), curve_z.y)
     y1_ = gpr1.predict(t_.reshape(-1,1))
     y2_ = gpr2.predict(t_.reshape(-1,1))
+    # y3_ = gpr3.predict(t_.reshape(-1,1))
     print(gpr1.kernel_.get_params())
     print(gpr2.kernel_.get_params())
+    # print(gpr3.kernel_.get_params())
 
     gpr = GaussianProcessRegressor(msk, alpha=curve.y_err**2)
     gpr.fit(curve.X, curve.y)
@@ -44,6 +48,7 @@ if __name__ == '__main__':
 
     plt.plot(t_, y1_*curve_i.y_norm, '--b', label='individual - i')
     plt.plot(t_, y2_*curve_r.y_norm, '--r', label='individual - r')
+    # plt.plot(t_, y3_*curve_z.y_norm, '--g', label='individual - z')
 
     plt.plot(t_, y_[:len(t_)]*curve.y_norm, 'b', label='correlated - i')
     plt.plot(t_, y_[len(t_):2*(len(t_))]*curve.y_norm, 'r', label='correlated - r')
