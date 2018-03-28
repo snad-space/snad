@@ -8,6 +8,9 @@ from sklearn.gaussian_process import kernels, GaussianProcessRegressor
 from curves import SNCurve
 
 
+LINE_STYLES = ("-","--","-.",":")
+
+
 if __name__ == '__main__':
     curve = SNCurve.from_name('SNLS-04D3fq', bands='i,r,z')
     curve_i = SNCurve.from_name('SNLS-04D3fq', bands='i')
@@ -43,8 +46,10 @@ if __name__ == '__main__':
 
     gpr = GaussianProcessRegressor(msk, alpha=curve.y_err**2)
     gpr.fit(curve.X, curve.y)
-    y_ = gpr.predict(x_)
+    y_, y_err_ = gpr.predict(x_, return_std=True)
+    y_samples_ = gpr.sample_y(x_, n_samples=3)
     print(gpr.kernel_.get_params())
+    print('Log Likelihood = ', gpr.log_marginal_likelihood_value_)
 
     plt.errorbar(curve_i.X[:,1], curve_i.y*curve_i.y_norm, curve_i.y_err*curve_i.y_norm, color='b', fmt='x', label='observation - i')
     plt.errorbar(curve_r.X[:,1], curve_r.y*curve_r.y_norm, curve_r.y_err*curve_r.y_norm, color='r', fmt='x', label='observation - r')
@@ -55,8 +60,18 @@ if __name__ == '__main__':
     # plt.plot(t_, y3_*curve_z.y_norm, '--g', label='individual - z')
 
     plt.plot(t_, y_[:len(t_)]*curve.y_norm, 'b', label='correlated - i')
+    plt.fill_between(t_, (y_[:len(t_)]-y_err_[:len(t_)])*curve.y_norm, (y_[:len(t_)]+y_err_[:len(t_)])*curve.y_norm, color='b', alpha=0.1)
     plt.plot(t_, y_[len(t_):2*(len(t_))]*curve.y_norm, 'r', label='correlated - r')
+    plt.fill_between(t_, (y_[len(t_):2*len(t_)]-y_err_[len(t_):2*len(t_)])*curve.y_norm, (y_[len(t_):2*len(t_)]+y_err_[len(t_):2*len(t_)])*curve.y_norm, color='r', alpha=0.1)
     plt.plot(t_, y_[2*len(t_):]*curve.y_norm, 'g', label='correlated - z')
+    plt.fill_between(t_, (y_[2*len(t_):]-y_err_[2*len(t_):])*curve.y_norm, (y_[2*len(t_):]+y_err_[2*len(t_):])*curve.y_norm, color='g', alpha=0.1)
+
+    for i, sample in enumerate(y_samples_.T):
+        ls = LINE_STYLES[i+1]
+        plt.plot(t_, sample[:len(t_)]*curve.y_norm, 'b', lw=0.5, ls=ls)
+        plt.plot(t_, sample[len(t_):2*len(t_)]*curve.y_norm, 'r', lw=0.5, ls=ls)
+        plt.plot(t_, sample[2*len(t_):]*curve.y_norm, 'g', lw=0.5, ls=ls)
 
     plt.legend()
+    plt.savefig('multistate.pdf')
     plt.show()
