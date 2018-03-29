@@ -1,8 +1,6 @@
-from __future__ import division
-
 import json
 import logging
-import os, os.path
+import os
 from collections import Iterable, Mapping, namedtuple, OrderedDict
 
 import numpy as np
@@ -11,6 +9,11 @@ import six
 from six import iteritems, iterkeys
 from six.moves import urllib
 from six.moves import UserList
+
+try:
+    import xattr
+except ImportError:
+    pass
 
 if six.PY2:
     from cachetools.func import lru_cache
@@ -21,11 +24,28 @@ else:
 class SNFiles(UserList):
     """Holds a list of SNs, paths to related *.json and download these files if
     needed.
+
+    Parameters
+    ----------
+    sns: list of strings
+        Names of SNs, i.e. name of target json file without extension
+    path: string, optional
+        Path to local directory to hold *.json files. If None, path
+        {path} will be used
+    baseurl: string, optional
+        First part of URL to ask for SN json data. If None, URL
+        {baseurl} will be used
+    offline: bool
+        No new data will be downloaded. ValueError will be raised if target
+        file cannot be found.
     """
+
     _path = 'sne/'
     _baseurl = 'https://sne.space/sne/'
 
-    def __init__(self, sns, path=None, baseurl=None, nocache=False):
+    __doc__ = __doc__.format(path=_path, baseurl=_baseurl)
+
+    def __init__(self, sns, path=None, baseurl=None, offline=False):
         if isinstance(sns, str):
             sns = self._names_from_csvfile(sns)
         if not isinstance(sns, Iterable):
@@ -46,23 +66,39 @@ class SNFiles(UserList):
             for x in self._filenames
         )
 
-        self._download(nocache=nocache)
+        for i, fpath in enumerate(self.filepaths):
+            if offline:
+                if not os.path.exists(fpath):
+                    raise ValueError("Path {} should exist in offline mode".format(fpath))
+            else:
+                self._download(fpath, self.urls[i])
 
-    def _download(self, nocache):
+    def _download(self, fpath, url):
         try:
             os.makedirs(self._path)
         except OSError as e:
             if not os.path.isdir(self._path):
                 raise e
-        for i, filepath in enumerate(self.filepaths):
-            if nocache or not os.path.exists(filepath):
-                logging.info('Downloading {}'.format(self._filenames[i]))
-                logging.info(self.urls[i])
-                r = requests.get(self.urls[i], stream=True)
-                r.raise_for_status()
-                with open(filepath, 'wb') as fd:
-                    for chunk in r.iter_content(chunk_size=None):
-                        fd.write(chunk)
+        headers = {}
+        try:
+            etag = xattr.getxattr(fpath, b'user.etag')
+            headers['If-None-Match'] = etag
+        except (IOError, NameError):
+            pass
+        logging.info('Downloading {}'.format(fpath))
+        logging.info(url)
+        r = requests.get(url, stream=True, headers=headers)
+        r.raise_for_status()
+        if r.status_code != requests.codes.ok:
+            return
+        with open(fpath, 'wb') as fd:
+            for chunk in r.iter_content(chunk_size=None):
+                fd.write(chunk)
+        try:
+            etag = r.headers['etag'].encode('utf-8')
+            xattr.setxattr(fpath, b'user.etag', etag)
+        except (KeyError, NameError):
+            pass
 
     def __repr__(self):
         return 'SN names: {sns}\nFiles: {fns}\nURLs: {urls}'.format(sns=super(SNFiles, self).__repr__(),

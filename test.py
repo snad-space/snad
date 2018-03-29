@@ -2,15 +2,16 @@
 
 import json
 import logging
+import mmap
 import operator
-import os.path
-import time
+import shutil
 import unittest
 from functools import reduce
-from tempfile import NamedTemporaryFile
+from tempfile import mkdtemp, NamedTemporaryFile
 
 import numpy as np
 import pandas
+# from requests_mock import Mocker
 import six
 from numpy.testing import assert_allclose, assert_equal
 
@@ -54,24 +55,54 @@ def _get_curves(sns):
 
 
 class DownloadTestCase(unittest.TestCase):
-    def check_file(self, fpath, time_before_download):
-        mod_time = os.path.getmtime(fpath)
-        self.assertLessEqual(time_before_download, mod_time)
+    def setUp(self):
+        self.tmp_dir = mkdtemp(prefix='tmpsne')
 
-    def run_test_for_sns(self, sns):
-        t = time.time()
-        sn_files = SNFiles(sns, nocache=True)
-        for fpath in sn_files.filepaths:
-            self.check_file(fpath, t)
+    def tearDown(self):
+        shutil.rmtree(self.tmp_dir)
+
+    @staticmethod
+    def check_file_is_json(fpath):
+        with open(fpath) as fp:
+            j = json.load(fp)
+        del j
+
+    def check_file_contains_SN_name(self, fpath, snname):
+        with open(fpath, 'r+') as fp:
+            s = mmap.mmap(fp.fileno(), 0)
+            if six.PY2:
+                snname_bytes = snname
+            else:
+                snname_bytes = snname.encode('utf-8')
+            try:
+                self.assertNotEqual(s.find(snname_bytes), -1,
+                                    msg="File {} doesn't contain name of SN '{}'".format(fpath, snname))
+            finally:
+                s.close()
 
     def test_list_download(self):
-        self.run_test_for_sns(SNS_ALL)
+        sn_files = SNFiles(SNS_ALL, path=self.tmp_dir, offline=False)
+        for i, fpath in enumerate(sn_files.filepaths):
+            self.check_file_is_json(fpath)
+            self.check_file_contains_SN_name(fpath, sn_files[i])
 
+    def test_download_after_etag_update(self):
+        pass
+
+    def test_not_download_for_same_etag(self):
+        pass
+
+    def test_not_found_raises(self):
+        pass
+
+
+class LoadSNListFromCSV(unittest.TestCase):
     def test_csv_download(self):
         table = pandas.DataFrame(data=list(SNS_ALL), columns=['Name'])
         with NamedTemporaryFile(mode='w+', suffix='.csv') as fd:
             table.to_csv(fd.name)
-            self.run_test_for_sns(fd.name)
+            sn_files = SNFiles(fd.name)
+            self.assertEqual(set(sn_files), SNS_ALL)
 
 
 class SNFilesReprTestCase(unittest.TestCase):
