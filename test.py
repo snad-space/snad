@@ -4,6 +4,7 @@ import json
 import logging
 import mmap
 import operator
+import requests
 import shutil
 import unittest
 from functools import reduce
@@ -20,33 +21,33 @@ from curves import SNCurve, SNFiles
 
 TEST_JSON_PATH = 'test.json'
 
-SNS_NO_CMAIMED_TYPE = {
+SNS_NO_CMAIMED_TYPE = frozenset((
     'SNLS-03D3ce',
-}
+))
 
-SNS_UPPER_LIMIT = {
+SNS_UPPER_LIMIT = frozenset((
     'SNLS-04D3fq',
     'PS1-10ahf',
-}
+))
 
-SNS_E_LOWER_UPPER_MAGNITUDE = {
+SNS_E_LOWER_UPPER_MAGNITUDE = frozenset((
     'SNLS-04D3fq',
-}
+))
 
-SNS_UNORDERED_PHOTOMETRY = {
+SNS_UNORDERED_PHOTOMETRY = frozenset((
     'PTF09atu',
     'PS1-10ahf',
-}
+))
 
-SNS_HAS_SPECTRA = {
+SNS_HAS_SPECTRA = frozenset((
     'SNLS-04D3fq',
-}
+))
 
-SNS_HAS_NOT_SPECTRA = {
+SNS_HAS_NOT_SPECTRA = frozenset((
     'SN1993A',
-}
+))
 
-SNS_ALL = set.union(SNS_NO_CMAIMED_TYPE, SNS_UPPER_LIMIT, SNS_E_LOWER_UPPER_MAGNITUDE, SNS_UNORDERED_PHOTOMETRY)
+SNS_ALL = frozenset.union(SNS_NO_CMAIMED_TYPE, SNS_UPPER_LIMIT, SNS_E_LOWER_UPPER_MAGNITUDE, SNS_UNORDERED_PHOTOMETRY)
 
 
 def _get_curves(sns):
@@ -54,20 +55,21 @@ def _get_curves(sns):
     return [SNCurve.from_json(fpath) for fpath in sn_files.filepaths]
 
 
-class DownloadTestCase(unittest.TestCase):
+class BaseSNFilesTestCase(unittest.TestCase):
     def setUp(self):
         self.tmp_dir = mkdtemp(prefix='tmpsne')
 
     def tearDown(self):
         shutil.rmtree(self.tmp_dir)
 
-    @staticmethod
-    def check_file_is_json(fpath):
+    def _check_file_is_json(self, fpath):
         with open(fpath) as fp:
-            j = json.load(fp)
-        del j
+            try:
+                json.load(fp)
+            except json.JSONDecodeError as e:
+                self.fail(str(e))
 
-    def check_file_contains_SN_name(self, fpath, snname):
+    def _check_file_contains_SN_name(self, fpath, snname):
         with open(fpath, 'r+') as fp:
             s = mmap.mmap(fp.fileno(), 0)
             if six.PY2:
@@ -80,20 +82,46 @@ class DownloadTestCase(unittest.TestCase):
             finally:
                 s.close()
 
+    def check_SNfiles(self, sn_files):
+        for i, fpath in enumerate(sn_files.filepaths):
+            self._check_file_is_json(fpath)
+            self._check_file_contains_SN_name(fpath, sn_files[i])
+
+
+class DownloadFromSneTestCase(BaseSNFilesTestCase):
     def test_list_download(self):
         sn_files = SNFiles(SNS_ALL, path=self.tmp_dir, offline=False)
-        for i, fpath in enumerate(sn_files.filepaths):
-            self.check_file_is_json(fpath)
-            self.check_file_contains_SN_name(fpath, sn_files[i])
+        self.check_SNfiles(sn_files)
 
+    def test_not_found_raises(self):
+        snname = '8cbac453'
+        with self.assertRaises(requests.HTTPError):
+            SNFiles([snname], path=self.tmp_dir, offline=False)
+
+
+class DownloadCacheTestCase(unittest.TestCase):
     def test_download_after_etag_update(self):
         pass
 
     def test_not_download_for_same_etag(self):
         pass
 
-    def test_not_found_raises(self):
-        pass
+
+class SNFilesOfflineMode(BaseSNFilesTestCase):
+    def setUp(self):
+        super(SNFilesOfflineMode, self).setUp()
+        sns = sorted(SNS_ALL)
+        self.snnames_exist = [sns[0]]
+        self.snnames_not_exist = ['c4048589']
+        self.sn_files_online = SNFiles(self.snnames_exist, path=self.tmp_dir, offline=False)
+
+    def test_file_exists(self):
+        sn_files = SNFiles(self.snnames_exist, path=self.tmp_dir, offline=True)
+        self.check_SNfiles(sn_files)
+
+    def test_raises_if_no_file(self):
+        with self.assertRaises(ValueError):
+            SNFiles(self.snnames_not_exist, path=self.tmp_dir, offline=True)
 
 
 class LoadSNListFromCSV(unittest.TestCase):
