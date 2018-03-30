@@ -1,11 +1,12 @@
 import json
 import logging
 import os
+import sys
 from collections import Iterable, Mapping, namedtuple, OrderedDict
 
 import numpy as np
 import requests
-import six
+from six import binary_type
 from six import iteritems, iterkeys
 from six.moves import urllib
 from six.moves import UserList
@@ -80,6 +81,8 @@ class SNFiles(SNPaths):
         file cannot be found.
     """.format(path=SNPaths._path, baseurl=SNPaths._baseurl)
 
+    xattr_etag_name = b'user.etag'
+
     def __init__(self, sns, path=None, baseurl=None, offline=False):
         super(SNFiles, self).__init__(sns, path, baseurl)
 
@@ -98,26 +101,43 @@ class SNFiles(SNPaths):
                 self._download(fpath, self.urls[i])
 
     def _download(self, fpath, url):
-        headers = {}
+        etag = self._get_file_etag(fpath)
+
+        response = self._get_response(url, etag)
+        if response.status_code == requests.codes.not_modified:
+            return
+        elif response.status_code != requests.codes.ok:
+            raise RuntimeError('HTTP status code should be 200 or 400, not {}'.format(response.status_code))
+
+        with open(fpath, 'wb') as fd:
+            for chunk in response.iter_content(chunk_size=4096):
+                fd.write(chunk)
+
+        if 'etag' in response.headers:
+            self._set_file_etag(fpath, response.headers['etag'])
+
+    def _get_file_etag(self, fpath):
+        if not os.path.exists(fpath) or 'xattr' not in sys.modules:
+            return None
         try:
-            etag = xattr.getxattr(fpath, b'user.etag')
+            return xattr.getxattr(fpath, self.xattr_etag_name)
+        except OSError:
+            return None
+
+    def _set_file_etag(self, fpath, etag):
+        if 'xattr' not in sys.modules:
+            return
+        if not isinstance(etag, binary_type):
+            etag = etag.encode('utf-8')
+        xattr.setxattr(fpath, self.xattr_etag_name, etag)
+
+    def _get_response(self, url, etag=None):
+        headers = {}
+        if etag is not None:
             headers['If-None-Match'] = etag
-        except (IOError, NameError):
-            pass
-        logging.info('Downloading {}'.format(fpath))
-        logging.info(url)
         r = requests.get(url, stream=True, headers=headers)
         r.raise_for_status()
-        if r.status_code != requests.codes.ok:
-            return
-        with open(fpath, 'wb') as fd:
-            for chunk in r.iter_content(chunk_size=None):
-                fd.write(chunk)
-        try:
-            etag = r.headers['etag'].encode('utf-8')
-            xattr.setxattr(fpath, b'user.etag', etag)
-        except (KeyError, NameError):
-            pass
+        return r
 
 
 def _transform_to_tuple(value):

@@ -12,7 +12,6 @@ from tempfile import mkdtemp, NamedTemporaryFile
 
 import numpy as np
 import pandas
-# from requests_mock import Mocker
 import six
 from numpy.testing import assert_allclose, assert_equal
 
@@ -55,7 +54,7 @@ def _get_curves(sns):
     return [SNCurve.from_json(fpath) for fpath in sn_files.filepaths]
 
 
-class BaseSNFilesTestCase(unittest.TestCase):
+class BasicSNFilesTestCase(unittest.TestCase):
     def setUp(self):
         self.tmp_dir = mkdtemp(prefix='tmpsne')
 
@@ -88,7 +87,7 @@ class BaseSNFilesTestCase(unittest.TestCase):
             self._check_file_contains_SN_name(fpath, sn_files[i])
 
 
-class DownloadFromSneTestCase(BaseSNFilesTestCase):
+class DownloadFromSneTestCase(BasicSNFilesTestCase):
     def test_list_download(self):
         sn_files = SNFiles(SNS_ALL, path=self.tmp_dir, offline=False)
         self.check_SNfiles(sn_files)
@@ -99,7 +98,7 @@ class DownloadFromSneTestCase(BaseSNFilesTestCase):
             SNFiles([snname], path=self.tmp_dir, offline=False)
 
 
-class DownloadCacheTestCase(unittest.TestCase):
+class DownloadCacheTestCase(BasicSNFilesTestCase):
     def test_download_after_etag_update(self):
         pass
 
@@ -107,7 +106,7 @@ class DownloadCacheTestCase(unittest.TestCase):
         pass
 
 
-class SNFilesOfflineMode(BaseSNFilesTestCase):
+class SNFilesOfflineMode(BasicSNFilesTestCase):
     def setUp(self):
         super(SNFilesOfflineMode, self).setUp()
         sns = sorted(SNS_ALL)
