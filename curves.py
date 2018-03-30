@@ -15,13 +15,53 @@ try:
 except ImportError:
     pass
 
-if six.PY2:
-    from cachetools.func import lru_cache
-else:
+try:
     from functools import lru_cache
+except ImportError:
+    from cachetools.func import lru_cache
 
 
-class SNFiles(UserList):
+class SNPaths(UserList):
+    _path = 'sne/'
+    _baseurl = 'https://sne.space/sne/'
+
+    def __init__(self, sns, path, baseurl):
+        if isinstance(sns, str):
+            sns = self._names_from_csvfile(sns)
+        if not isinstance(sns, Iterable):
+            raise ValueError('sns should be filename or iterable')
+
+        super(SNPaths, self).__init__(sns)
+
+        if path is None:
+            path = self._path
+        if baseurl is None:
+            baseurl = self._baseurl
+        self.path = path
+        self.baseurl = baseurl
+
+        self._filenames = list( x + '.json' for x in self )
+        self.filepaths = list( os.path.join(os.path.abspath(self.path), x) for x in self._filenames )
+        self.urls = list(
+            urllib.parse.urljoin(self.baseurl, urllib.parse.quote(x))
+            for x in self._filenames
+        )
+
+    def __repr__(self):
+        return 'SN names: {sns}\nFiles: {fns}\nURLs: {urls}'.format(sns=super(SNPaths, self).__repr__(),
+                                                                    fns=repr(self.filepaths),
+                                                                    urls=repr(self.urls))
+
+    @staticmethod
+    def _names_from_csvfile(filename):
+        """Get SN names from the `Name` column of CSV file. Such a file can
+        be obtained from https://sne.space"""
+        from pandas import read_csv
+        data = read_csv(filename)
+        return data.Name.as_matrix()
+
+
+class SNFiles(SNPaths):
     """Holds a list of SNs, paths to related *.json and download these files if
     needed.
 
@@ -38,33 +78,17 @@ class SNFiles(UserList):
     offline: bool
         No new data will be downloaded. ValueError will be raised if target
         file cannot be found.
-    """
-
-    _path = 'sne/'
-    _baseurl = 'https://sne.space/sne/'
-
-    __doc__ = __doc__.format(path=_path, baseurl=_baseurl)
+    """.format(path=SNPaths._path, baseurl=SNPaths._baseurl)
 
     def __init__(self, sns, path=None, baseurl=None, offline=False):
-        if isinstance(sns, str):
-            sns = self._names_from_csvfile(sns)
-        if not isinstance(sns, Iterable):
-            raise ValueError('sns should be filename or iterable')
+        super(SNFiles, self).__init__(sns, path, baseurl)
 
-        super(SNFiles, self).__init__(sns)
-
-        if path is not None:
-            self._path = path
-
-        if baseurl is not None:
-            self._baseurl = baseurl
-
-        self._filenames = list( x + '.json' for x in self )
-        self.filepaths = list( os.path.join(os.path.abspath(self._path), x) for x in self._filenames )
-        self.urls = list(
-            urllib.parse.urljoin(self._baseurl, urllib.parse.quote(x))
-            for x in self._filenames
-        )
+        if not offline:
+            try:
+                os.makedirs(self._path)
+            except OSError as e:
+                if not os.path.isdir(self._path):
+                    raise e
 
         for i, fpath in enumerate(self.filepaths):
             if offline:
@@ -74,11 +98,6 @@ class SNFiles(UserList):
                 self._download(fpath, self.urls[i])
 
     def _download(self, fpath, url):
-        try:
-            os.makedirs(self._path)
-        except OSError as e:
-            if not os.path.isdir(self._path):
-                raise e
         headers = {}
         try:
             etag = xattr.getxattr(fpath, b'user.etag')
@@ -99,19 +118,6 @@ class SNFiles(UserList):
             xattr.setxattr(fpath, b'user.etag', etag)
         except (KeyError, NameError):
             pass
-
-    def __repr__(self):
-        return 'SN names: {sns}\nFiles: {fns}\nURLs: {urls}'.format(sns=super(SNFiles, self).__repr__(),
-                                                                    fns=repr(self.filepaths),
-                                                                    urls=repr(self.urls))
-
-    @staticmethod
-    def _names_from_csvfile(filename):
-        """Get SN names from the `Name` column of CSV file. Such a file can
-        be obtained from https://sne.space"""
-        from pandas import read_csv
-        data = read_csv(filename)
-        return data.Name.as_matrix()
 
 
 def _transform_to_tuple(value):
