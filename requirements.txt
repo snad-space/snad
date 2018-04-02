@@ -4,3 +4,4 @@ requests
 pandas
 cachetools; python_version < '3.2'
 xattr; sys_platform == 'linux' or sys_platform == 'darwin'
+mock; python_version < '3.3'

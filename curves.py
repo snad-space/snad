@@ -107,7 +107,7 @@ class SNFiles(SNPaths):
         if response.status_code == requests.codes.not_modified:
             return
         elif response.status_code != requests.codes.ok:
-            raise RuntimeError('HTTP status code should be 200 or 400, not {}'.format(response.status_code))
+            raise RuntimeError('HTTP status code should be 200 or 304, not {}'.format(response.status_code))
 
         with open(fpath, 'wb') as fd:
             for chunk in response.iter_content(chunk_size=4096):
@@ -131,7 +131,8 @@ class SNFiles(SNPaths):
             etag = etag.encode('utf-8')
         xattr.setxattr(fpath, self.xattr_etag_name, etag)
 
-    def _get_response(self, url, etag=None):
+    @staticmethod
+    def _get_response(url, etag=None):
         headers = {}
         if etag is not None:
             headers['If-None-Match'] = etag
@@ -162,6 +163,11 @@ class BadPhotometryDataError(ValueError):
 
 
 class FrozenOrderedDict(Mapping):
+    """Immutable ordered dictionary
+
+    It is based on collections.OpereredDict, so it is ordered by the order of
+    input elements"""
+
     def __init__(self, *args, **kwargs):
         self._d = OrderedDict(*args, **kwargs)
         self._hash = None

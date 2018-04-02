@@ -13,7 +13,13 @@ from tempfile import mkdtemp, NamedTemporaryFile
 import numpy as np
 import pandas
 import six
+from six import BytesIO
 from numpy.testing import assert_allclose, assert_equal
+
+try:
+    from unittest import mock
+except ImportError:
+    import mock
 
 from curves import SNCurve, SNFiles
 
@@ -47,6 +53,7 @@ SNS_HAS_NOT_SPECTRA = frozenset((
 ))
 
 SNS_ALL = frozenset.union(SNS_NO_CMAIMED_TYPE, SNS_UPPER_LIMIT, SNS_E_LOWER_UPPER_MAGNITUDE, SNS_UNORDERED_PHOTOMETRY)
+SNS_ALL_TUPLE = tuple(sorted(SNS_ALL))
 
 
 def _get_curves(sns):
@@ -99,18 +106,72 @@ class DownloadFromSneTestCase(BasicSNFilesTestCase):
 
 
 class DownloadCacheTestCase(BasicSNFilesTestCase):
-    def test_download_after_etag_update(self):
-        pass
+    etag1 = b'1'
+    etag2 = b'2'
+    content = b'1'
 
-    def test_not_download_for_same_etag(self):
-        pass
+    def response_template(self):
+        r = requests.Response()
+        r.status_code = 200
+        r.raw = BytesIO(self.content)
+        return r
+
+    def setUp(self):
+        super(DownloadCacheTestCase, self).setUp()
+        self.snnames = SNS_ALL_TUPLE[:1]
+
+    @mock.patch.object(SNFiles, '_get_response')
+    @mock.patch.object(SNFiles, '_set_file_etag')
+    @mock.patch.object(SNFiles, '_get_file_etag', return_value=etag1)
+    def test_download_after_etag_update(self, mock_get_file_etag, mock_set_file_etag, mock_get_response):
+        response = self.response_template()
+        response.headers = {'etag': self.etag2}
+        mock_get_response.return_value = response
+
+        def set_file_etag_side_effect(fpath, etag):
+            self.assertEqual(etag, self.etag2)
+        mock_set_file_etag.side_effect = set_file_etag_side_effect
+
+        SNFiles(self.snnames, path=self.tmp_dir, offline=False)
+        self.assertTrue(mock_get_file_etag.called)
+        self.assertTrue(mock_get_response.called)
+        self.assertTrue(mock_set_file_etag.called)
+
+    @mock.patch.object(SNFiles, '_get_response')
+    @mock.patch.object(SNFiles, '_set_file_etag')
+    @mock.patch.object(SNFiles, '_get_file_etag', return_value=etag1)
+    def test_not_download_for_same_etag(self, mock_get_file_etag, mock_set_file_etag, mock_get_response):
+        response = self.response_template()
+        response.status_code = 304
+        response.iter_content = mock.Mock()
+        mock_get_response.return_value = response
+
+        def get_response_side_effect(url, etag):
+            self.assertEqual(etag, self.etag1)
+            return mock.DEFAULT
+        mock_get_response.side_effect = get_response_side_effect
+
+        SNFiles(self.snnames, path=self.tmp_dir, offline=False)
+        self.assertTrue(mock_get_file_etag.called)
+        self.assertTrue(mock_get_response.called)
+        response.iter_content.assert_not_called()
+        mock_set_file_etag.assert_not_called()
+
+
+    @mock.patch.object(SNFiles, '_get_response')
+    @mock.patch.object(SNFiles, '_get_file_etag', return_value=None)
+    def test_download_if_no_xatrr(self, mock_get_file_etag, mock_get_response):
+        mock_get_response.return_value = self.response_template()
+
+        SNFiles(self.snnames, path=self.tmp_dir, offline=False)
+        self.assertTrue(mock_get_file_etag.called)
+        self.assertTrue(mock_get_response.called)
 
 
 class SNFilesOfflineMode(BasicSNFilesTestCase):
     def setUp(self):
         super(SNFilesOfflineMode, self).setUp()
-        sns = sorted(SNS_ALL)
-        self.snnames_exist = [sns[0]]
+        self.snnames_exist = SNS_ALL_TUPLE[:1]
         self.snnames_not_exist = ['c4048589']
         self.sn_files_online = SNFiles(self.snnames_exist, path=self.tmp_dir, offline=False)
 
