@@ -7,7 +7,7 @@ from collections import Iterable, Mapping, namedtuple, OrderedDict
 import numpy as np
 import requests
 from six import binary_type
-from six import iteritems, iterkeys
+from six import iteritems, iterkeys, itervalues
 from six.moves import urllib
 from six.moves import UserList
 
@@ -165,8 +165,7 @@ class BadPhotometryDataError(ValueError):
 class FrozenOrderedDict(Mapping):
     """Immutable ordered dictionary
 
-    It is based on collections.OpereredDict, so it is ordered by the order of
-    input elements"""
+    It is based on collections.OrderedDict, so it remembers insertion order"""
 
     def __init__(self, *args, **kwargs):
         self._d = OrderedDict(*args, **kwargs)
@@ -185,6 +184,79 @@ class FrozenOrderedDict(Mapping):
         if self._hash is None:
             self._hash = hash(iteritems(self._d))
         return self._hash
+
+
+StateData = namedtuple('StateData', ('x', 'y', 'err',))
+ScikitLearnData = namedtuple('ScikitLearnData', ('x', 'y', 'err', 'norm'))
+
+
+class MultiStateData:
+    def __init__(self, state_data_dict, scikit_learn_data):
+        self._dict = state_data_dict
+        self._scikit = scikit_learn_data
+
+        for attr in ('x', 'y', 'err'):
+            self._scikit.__getattribute__(attr).flags.writeable = False
+
+        self._keys_tuple = tuple(iterkeys(self._dict))
+        self._state_idx_dict = {x: i for i,x in enumerate(self._dict)}
+
+    @property
+    def state_data_dict(self):
+        return self._dict
+
+    @property
+    def scikit_learn_data(self):
+        return self._scikit
+
+    @property
+    def norm(self):
+        return self._scikit.norm
+
+    @classmethod
+    def from_items(cls, items):
+        return cls.from_state_data((k, StateData(*v)) for k,v in items)
+
+    @classmethod
+    def from_state_data(cls, *args, **kwargs):
+        d = FrozenOrderedDict(*args, **kwargs)
+        x = np.block(list(
+            [np.full_like(v.x, i).reshape(-1,1), v.x.reshape(-1,1)] for i,v in enumerate(itervalues(d))
+        ))
+        y = np.hstack((v.y for v in itervalues(d)))
+        if y.size == 0:
+            raise ValueError('Arrays should have non-zero length')
+        if y.size == 1:
+            norm = y[0]
+        else:
+            norm = y.std()
+        y /= norm
+        err = np.hstack((v.err for v in itervalues(d))) / norm
+        return cls(d, ScikitLearnData(x=x, y=y, err=err, norm=norm))
+
+    @classmethod
+    def from_arrays(cls, x, y, err, norm=1, **kwargs):
+        return cls.from_scikit_learn_data(ScikitLearnData(x=x, y=y, err=err, norm=norm), **kwargs)
+
+    @classmethod
+    def from_scikit_learn_data(cls, data, keys=None):
+        if keys is None:
+            keys = np.unique(data.x[:,0])
+
+        def multi_state_data_generator():
+            for i, key in enumerate(keys):
+                idx = data.x[:,0] == i
+                yield (key, StateData(data.x[idx,1], data.y[idx]*data.norm, data.err[idx]*data.norm))
+        return cls(FrozenOrderedDict(multi_state_data_generator()), data)
+
+    def key(self, idx):
+        return self._keys_tuple[idx]
+
+    def idx(self, key):
+        return self._state_idx_dict[key]
+
+    def convert_arrays(self, x, y, err):
+        return type(self).from_arrays(x, y, err, norm=self.norm)
 
 
 class SNCurve(FrozenOrderedDict):
