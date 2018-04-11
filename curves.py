@@ -212,8 +212,6 @@ class SNCurve(FrozenOrderedDict):
         if bands is not None:
             bands = _transform_to_tuple(bands)
             bands_set = set(bands)
-        else:
-            bands_set = set()
 
         self._has_spectra = 'spectra' in self._json
 
@@ -275,6 +273,10 @@ class SNCurve(FrozenOrderedDict):
 
         if bands is None:
             bands = tuple(sorted(iterkeys(d)))
+        else:
+            for band in bands:
+                if band not in d:
+                    raise ValueError("There isn't observation in the band {} for SN {}".format(band, self.name) )
         self.bands = bands
 
         super(SNCurve, self).__init__(((band, d[band]) for band in self.bands))

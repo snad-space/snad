@@ -44,21 +44,24 @@ SNS_UNORDERED_PHOTOMETRY = frozenset((
     'PS1-10ahf',
 ))
 
-SNS_HAS_SPECTRA = frozenset((
+SNS_HAVE_SPECTRA = frozenset((
     'SNLS-04D3fq',
 ))
 
-SNS_HAS_NOT_SPECTRA = frozenset((
+SNS_HAVE_NOT_SPECTRA = frozenset((
     'SN1993A',
 ))
 
-SNS_ALL = frozenset.union(SNS_NO_CMAIMED_TYPE, SNS_UPPER_LIMIT, SNS_E_LOWER_UPPER_MAGNITUDE, SNS_UNORDERED_PHOTOMETRY)
+SNS_HAVE_B_BAND = frozenset((
+    'SN1993A',
+))
+
+SNS_ALL = frozenset.union(SNS_NO_CMAIMED_TYPE, SNS_UPPER_LIMIT, SNS_E_LOWER_UPPER_MAGNITUDE, SNS_UNORDERED_PHOTOMETRY, SNS_HAVE_B_BAND)
 SNS_ALL_TUPLE = tuple(sorted(SNS_ALL))
 
 
 def _get_curves(sns):
-    sn_files = SNFiles(sns)
-    return [SNCurve.from_json(fpath) for fpath in sn_files.filepaths]
+    return [SNCurve.from_name(sn) for sn in sns]
 
 
 class BasicSNFilesTestCase(unittest.TestCase):
@@ -213,6 +216,21 @@ class ReadLightCurvesFromJsonTestCase(unittest.TestCase):
             self.read_file(fname)
 
 
+class BandDataTestCase(unittest.TestCase):
+    def test_has_band(self):
+        band = 'B'
+        for sn in SNS_HAVE_B_BAND:
+            curve = SNCurve.from_name(sn, bands=band)
+            self.assertEqual(len(curve.bands), 1)
+            self.assertIn(band, curve)
+
+    def test_has_not_band(self):
+        band = 'HBRW'
+        sn = SNS_ALL_TUPLE[0]
+        with self.assertRaises(ValueError):
+            SNCurve.from_name(sn, bands=band)
+
+
 class UpperLimitTestCase(unittest.TestCase):
     def setUp(self):
         self.curves = _get_curves(SNS_UPPER_LIMIT)
@@ -226,12 +244,12 @@ class UpperLimitTestCase(unittest.TestCase):
 
 class HasSpectraTestCase(unittest.TestCase):
     def test_has_spectra(self):
-        curves = _get_curves(SNS_HAS_SPECTRA)
+        curves = _get_curves(SNS_HAVE_SPECTRA)
         for curve in curves:
             self.assertTrue(curve.has_spectra, 'SN {} data should contain spectra'.format(curve.name))
 
     def test_has_not_spectra(self):
-        curves = _get_curves(SNS_HAS_NOT_SPECTRA)
+        curves = _get_curves(SNS_HAVE_NOT_SPECTRA)
         for curve in curves:
             self.assertFalse(curve.has_spectra, 'SN {} data should not contain spectra'.format(curve.name))
 
