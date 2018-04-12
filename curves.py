@@ -6,7 +6,7 @@ from collections import Iterable, Mapping, namedtuple, OrderedDict
 
 import numpy as np
 import requests
-from multistate_kernel.util import FrozenOrderedDict
+from multistate_kernel.util import FrozenOrderedDict, data_from_items
 from six import binary_type
 from six import iteritems, iterkeys, itervalues
 from six.moves import urllib
@@ -335,33 +335,74 @@ class SNCurve(FrozenOrderedDict):
     def has_spectra(self):
         return self._has_spectra
 
-    def scikit_learn_data(self, with_upper_limits=False, with_inf_e_flux=False):
-        if with_upper_limits and with_inf_e_flux:
-            ph = self
+    def multi_state_data(self, with_upper_limits=False, with_inf_e_flux=False, bands=None, sort='default'):
+        """Filtered and sorted by bands MultiStateData object
+
+        Parameters
+        ----------
+        with_upper_limits: bool, optional
+            Include observation point marked as an upper limit
+        with_inf_e_flux: bool, optional
+            Include observation point with infinity/NaN error
+        bands: iterable or None, optional
+            Bands to return. Default is None, SNCurves.bands will be used
+        sort: str, optional
+            How `bands` will be sorted. Should be one of the following
+            strings:
+
+                - 'default' will keep the order of `bands`
+                - 'alphabetic' or 'alpha' will sort `bands` alphabetically
+                - 'total' will sort `bands` by the total number of photometric
+                  points
+                - 'filtered' will sort `bands` by the number of returned
+                  photometric points, e.g. points filtered by
+                  `with_upper_limits` and `with_inf_e_flux` arguments
+
+        Returns
+        -------
+        MultiStateData
+        """
+        @lru_cache(maxsize=1)
+        def fd():
+            return {band: self[band][(np.logical_not(self[band]['isupperlimit']) + with_upper_limits)
+                                      & (np.isfinite(self[band]['e_flux']) + with_inf_e_flux)]
+                    for band in bands}
+
+        if bands is None:
+            bands = self.bands
+
+        if sort == 'default':
+            pass
+        elif sort == 'alphabetic' or sort == 'alpha':
+            bands = sorted(bands)
+        elif sort == 'total':
+            bands = sorted(bands, key=lambda band: self[band].size)
+        elif sort == 'filtered':
+            bands = sorted(bands, key=lambda band: fd()[band].size)
         else:
-            ph = {
-                band: self[band][(np.logical_not(self[band]['isupperlimit']) + with_upper_limits)
-                                 & (np.isfinite(self[band]['e_flux']) + with_inf_e_flux)]
-                for band in self.bands
-            }
-        X = np.block(list(
-                [np.full_like(ph[band]['time'], i).reshape(-1,1), ph[band]['time'].reshape(-1,1)]
-                for i, band in enumerate(self.bands)
-        ))
-        y = np.hstack((ph[band]['flux'] for band in self.bands))
-        y_norm = y.std() or y.max()
-        y /= y_norm
-        y_err = np.hstack((ph[band]['e_flux'] for band in self.bands)) / y_norm
-        return self.ScikitLearnData(X=X, y=y, y_err=y_err, y_norm=y_norm)
+            raise ValueError('Argument sort={} is not supported'.format(sort))
+
+        if with_upper_limits and with_inf_e_flux:
+            ph = iteritems(self)
+        else:
+            def items_generator():
+                for band in bands:
+                    yield (band, (fd()[band][name] for name in ('time', 'flux', 'e_flux')))
+            ph = items_generator()
+        return data_from_items(ph)
+
 
     @property
     @lru_cache(maxsize=1)
     def _Xy(self):
-        return self.scikit_learn_data(with_upper_limits=False, with_inf_e_flux=False)
+        return self.multi_state_data(with_upper_limits=False,
+                                     with_inf_e_flux=False,
+                                     bands=None,
+                                     sort='filtered').arrays
 
     @property
     def X(self):
-        return self._Xy.X
+        return self._Xy.x
 
     @property
     def y(self):
@@ -373,7 +414,7 @@ class SNCurve(FrozenOrderedDict):
 
     @property
     def y_norm(self):
-        return self._Xy.y_norm
+        return self._Xy.norm
 
     def __repr__(self):
         return 'SN {} with claimed type {}. Photometry data:\n{}'.format(
