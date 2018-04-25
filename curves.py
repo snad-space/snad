@@ -370,15 +370,17 @@ class SNCurve(FrozenOrderedDict):
 
         if bands is None:
             bands = self.bands
+        else:
+            bands = _transform_to_tuple(bands)
 
         if sort == 'default':
             pass
         elif sort == 'alphabetic' or sort == 'alpha':
             bands = sorted(bands)
         elif sort == 'total':
-            bands = sorted(bands, key=lambda band: self[band].size)
+            bands = sorted(bands, key=lambda band: self[band].size, reverse=True)
         elif sort == 'filtered':
-            bands = sorted(bands, key=lambda band: fd()[band].size)
+            bands = sorted(bands, key=lambda band: fd()[band].size, reverse=True)
         else:
             raise ValueError('Argument sort={} is not supported'.format(sort))
 
