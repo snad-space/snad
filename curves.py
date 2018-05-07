@@ -364,6 +364,8 @@ class SNCurve(FrozenOrderedDict):
         """
         @lru_cache(maxsize=1)
         def fd():
+            if with_upper_limits and with_inf_e_flux:  # Little optimization
+                return self
             return {band: self[band][(np.logical_not(self[band]['isupperlimit']) + with_upper_limits)
                                       & (np.isfinite(self[band]['e_flux']) + with_inf_e_flux)]
                     for band in bands}
@@ -384,15 +386,11 @@ class SNCurve(FrozenOrderedDict):
         else:
             raise ValueError('Argument sort={} is not supported'.format(sort))
 
-        if with_upper_limits and with_inf_e_flux:
-            ph = iteritems(self)
-        else:
-            def items_generator():
-                for band in bands:
-                    yield (band, (fd()[band][name] for name in ('time', 'flux', 'e_flux')))
-            ph = items_generator()
+        def items_generator():
+            for band in bands:
+                yield (band, (fd()[band][name] for name in ('time', 'flux', 'e_flux')))
+        ph = items_generator()
         return data_from_items(ph)
-
 
     @property
     @lru_cache(maxsize=1)
