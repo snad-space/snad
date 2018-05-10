@@ -224,7 +224,7 @@ class SNCurve(FrozenOrderedDict):
                 band_curve = d.setdefault(dot['band'], [])
 
                 if 'e_time' in dot:
-                    e_time = dot['e_time']
+                    e_time = float(dot['e_time'])
                     if e_time < 0 or not np.isfinite(e_time):
                         raise BadPhotometryDataError(self.name, dot, 'e_time')
                 else:

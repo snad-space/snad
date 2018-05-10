@@ -33,10 +33,15 @@ SNS_NO_CMAIMED_TYPE = frozenset((
 SNS_UPPER_LIMIT = frozenset((
     'SNLS-04D3fq',
     'PS1-10ahf',
+    'MLS121209:093512+152855',
 ))
 
 SNS_E_LOWER_UPPER_MAGNITUDE = frozenset((
     'SNLS-04D3fq',
+))
+
+SNE_E_TIME = frozenset((
+    'MLS121209:093512+152855',
 ))
 
 SNS_UNORDERED_PHOTOMETRY = frozenset((
@@ -56,7 +61,8 @@ SNS_HAVE_B_BAND = frozenset((
     'SN1993A',
 ))
 
-SNS_ALL = frozenset.union(SNS_NO_CMAIMED_TYPE, SNS_UPPER_LIMIT, SNS_E_LOWER_UPPER_MAGNITUDE, SNS_UNORDERED_PHOTOMETRY, SNS_HAVE_B_BAND)
+SNS_ALL = frozenset.union(SNS_NO_CMAIMED_TYPE, SNS_UPPER_LIMIT, SNS_E_LOWER_UPPER_MAGNITUDE, SNE_E_TIME,
+                          SNS_UNORDERED_PHOTOMETRY, SNS_HAVE_B_BAND)
 SNS_ALL_TUPLE = tuple(sorted(SNS_ALL))
 
 
@@ -240,6 +246,18 @@ class UpperLimitTestCase(unittest.TestCase):
             has_upper_limit = reduce(operator.__or__,
                                      (np.any(lc['isupperlimit']) for lc in curve.values()))
             self.assertTrue(has_upper_limit, 'SN {} light curves should have upper limit dots')
+
+
+class EpsilonTimeTestCase(unittest.TestCase):
+    def setUp(self):
+        self.curves = _get_curves(SNE_E_TIME)
+
+    def test_has_finite_e_time(self):
+        for curve in self.curves:
+            has_finite_e_time = reduce(operator.__or__,
+                                       (np.any(np.isfinite(lc['e_time'])) for lc in curve.values()))
+            self.assertTrue(has_finite_e_time,
+                            'SN {} should have finite e_time dots')
 
 
 class HasSpectraTestCase(unittest.TestCase):
