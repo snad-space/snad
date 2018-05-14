@@ -106,10 +106,12 @@ class SNFiles(SNPaths):
 
         response = self._get_response(url, etag)
         if response.status_code == requests.codes.not_modified:
+            logging.info('File {} is up to data, skip downloading'.format(fpath))
             return
         elif response.status_code != requests.codes.ok:
             raise RuntimeError('HTTP status code should be 200 or 304, not {}'.format(response.status_code))
 
+        logging.info('Downloading {} to {}'.format(url, fpath))
         with open(fpath, 'wb') as fd:
             for chunk in response.iter_content(chunk_size=4096):
                 fd.write(chunk)
