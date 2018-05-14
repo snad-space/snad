@@ -21,7 +21,7 @@ try:
 except ImportError:
     import mock
 
-from curves import SNCurve, SNFiles
+from curves import SNCurve, SNFiles, NoPhotometryError, EmptyPhotometryError
 
 
 TEST_JSON_PATH = 'test.json'
@@ -51,6 +51,10 @@ SNS_UNORDERED_PHOTOMETRY = frozenset((
 
 SNS_HAVE_NOT_PHOTOMETRY = frozenset((
     'GRB 081025A',
+))
+
+SNS_ZERO_VALID_PHOTOMETRY_DOTS = frozenset((
+    'SN2007bk',
 ))
 
 SNS_HAVE_SPECTRA = frozenset((
@@ -264,15 +268,27 @@ class EpsilonTimeTestCase(unittest.TestCase):
                             'SN {} should have finite e_time dots')
 
 
-class HasPhotometryTestCase(unittest.TestCase):
-    def setUp(self):
-        self.sn_files = SNFiles(SNS_HAVE_NOT_PHOTOMETRY)
-
-    def test_has_not_photometry(self):
-        for fpath in self.sn_files.filepaths:
-            with self.assertRaises(KeyError,
+class BadPhotometryTestCase(unittest.TestCase):
+    def test_has_not_photometry_field(self):
+        sn_files = SNFiles(SNS_HAVE_NOT_PHOTOMETRY)
+        for fpath in sn_files.filepaths:
+            with self.assertRaises(NoPhotometryError,
                                    msg='{} should not contain photometry and KeyError should be raised'.format(fpath)):
                 SNCurve.from_json(fpath)
+
+    def test_has_zero_valid_photometry_dots(self):
+        sn_files = SNFiles(SNS_ZERO_VALID_PHOTOMETRY_DOTS)
+        for fpath in sn_files.filepaths:
+            with self.assertRaises(EmptyPhotometryError,
+                                   msg='{} should not contain any valid photometry dot'.format(fpath)):
+                SNCurve.from_json(fpath)
+
+    def test_has_no_observations_for_the_band(self):
+        band = 'MDUzZDJ'
+        for snname in SNS_ALL_TUPLE:
+            with self.assertRaises(EmptyPhotometryError,
+                                   msg='SN {} should not contain any observations in the band {}'.format(snname, band)):
+                SNCurve.from_name(snname, bands=band)
 
 
 class HasSpectraTestCase(unittest.TestCase):

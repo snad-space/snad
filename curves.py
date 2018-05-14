@@ -155,7 +155,7 @@ def _transform_to_tuple(value):
     return tuple(value)
 
 
-class BadPhotometryDataError(ValueError):
+class BadPhotometryDotError(ValueError):
     def __init__(self, sn_name, dot, field=None):
         if field is None:
             self.message = 'SN {name} has a bad photometry item {dot}'.format(name=sn_name, dot=dot)
@@ -163,6 +163,21 @@ class BadPhotometryDataError(ValueError):
             self.message = 'SN {name} has a photometry item with bad {field}: {dot}'.format(name=sn_name,
                                                                                             field=field,
                                                                                             dot=dot)
+        super(BadPhotometryDotError, self).__init__(self.message)
+
+
+class NoPhotometryError(ValueError):
+    def __init__(self, sn_name):
+        super(NoPhotometryError, self).__init__("SN {} data file has not field 'photometry'".format(sn_name))
+
+
+class EmptyPhotometryError(ValueError):
+    def __init__(self, sn_name, bands):
+        if bands is None:
+            self.message = 'SN {} has not any photometry observations'.format(sn_name)
+        else:
+            self.message = 'SN {} has not any photometry observations for bands {!s}'.format(sn_name, bands)
+        super(EmptyPhotometryError, self).__init__(self.message)
 
 
 class SNCurve(FrozenOrderedDict):
@@ -194,8 +209,12 @@ class SNCurve(FrozenOrderedDict):
     
     Raises
     ------
+    NoPhotometryError
+        `photometry` field is absent
+    EmptyPhotometryError
+        No valid photometry dots for given `bands`
     BadPhotometryDataError
-        Raises if any used photometry field contains bad data  
+        Raises if any used photometry dot contains bad data  
     """.format(dtype=__photometry_dtype)
 
     ScikitLearnData = namedtuple('ScikitLearnData', ('X', 'y', 'y_err', 'y_norm'))
@@ -218,6 +237,8 @@ class SNCurve(FrozenOrderedDict):
         self._has_spectra = 'spectra' in self._json
 
         self.ph = self.photometry = self
+        if not 'photometry' in self._json:
+            raise NoPhotometryError(self.name)
         for dot in self._json['photometry']:
             if 'time' in dot and 'band' in dot:
                 if (bands is not None) and (dot.get('band') not in bands_set):
@@ -228,14 +249,14 @@ class SNCurve(FrozenOrderedDict):
                 if 'e_time' in dot:
                     e_time = float(dot['e_time'])
                     if e_time < 0 or not np.isfinite(e_time):
-                        raise BadPhotometryDataError(self.name, dot, 'e_time')
+                        raise BadPhotometryDotError(self.name, dot, 'e_time')
                 else:
                     e_time = np.nan
 
                 magn = float(dot['magnitude'])
                 flux = np.power(10, -0.4 * magn)
                 if not np.isfinite(flux):
-                    raise BadPhotometryDataError(self.name, dot)
+                    raise BadPhotometryDotError(self.name, dot)
 
                 if 'e_lower_magnitude' in dot and 'e_upper_magnitude' in dot:
                     e_lower_magn = float(dot['e_lower_magnitude'])
@@ -244,18 +265,18 @@ class SNCurve(FrozenOrderedDict):
                     flux_upper = np.power(10, -0.4 * (magn - e_upper_magn))
                     e_flux = 0.5 * (flux_upper - flux_lower)
                     if e_lower_magn < 0:
-                        raise BadPhotometryDataError(self.name, dot, 'e_lower_magnitude')
+                        raise BadPhotometryDotError(self.name, dot, 'e_lower_magnitude')
                     if e_upper_magn < 0:
-                        raise BadPhotometryDataError(self.name, dot, 'e_upper_magnitude')
+                        raise BadPhotometryDotError(self.name, dot, 'e_upper_magnitude')
                     if not np.isfinite(e_flux):
-                        raise BadPhotometryDataError(self.name, dot)
+                        raise BadPhotometryDotError(self.name, dot)
                 elif 'e_magnitude' in dot:
                     e_magn = float(dot['e_magnitude'])
                     e_flux = 0.4 * np.log(10) * flux * e_magn
                     if e_magn < 0:
-                        raise BadPhotometryDataError(self.name, dot, 'e_magnitude')
+                        raise BadPhotometryDotError(self.name, dot, 'e_magnitude')
                     if not np.isfinite(e_flux):
-                        raise BadPhotometryDataError(self.name, dot)
+                        raise BadPhotometryDotError(self.name, dot)
                 else:
                     e_flux = np.nan
 
@@ -272,13 +293,15 @@ class SNCurve(FrozenOrderedDict):
                 logging.info('Original SN {} data for band {} contains unordered dots'.format(self._name, k))
                 v[:] = v[np.argsort(v['time'])]
             v.flags.writeable = False
+        if sum(len(v) for v in iteritems(d)) == 0:
+            raise EmptyPhotometryError(self.name, bands)
 
         if bands is None:
             bands = tuple(sorted(iterkeys(d)))
         else:
             for band in bands:
                 if band not in d:
-                    raise ValueError("There isn't observation in the band {} for SN {}".format(band, self.name) )
+                    raise EmptyPhotometryError(self.name, (band,))
         self.bands = bands
 
         super(SNCurve, self).__init__(((band, d[band]) for band in self.bands))
