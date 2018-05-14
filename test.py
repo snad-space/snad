@@ -49,6 +49,10 @@ SNS_UNORDERED_PHOTOMETRY = frozenset((
     'PS1-10ahf',
 ))
 
+SNS_HAVE_NOT_PHOTOMETRY = frozenset((
+    'GRB 081025A',
+))
+
 SNS_HAVE_SPECTRA = frozenset((
     'SNLS-04D3fq',
 ))
@@ -258,6 +262,17 @@ class EpsilonTimeTestCase(unittest.TestCase):
                                        (np.any(np.isfinite(lc['e_time'])) for lc in curve.values()))
             self.assertTrue(has_finite_e_time,
                             'SN {} should have finite e_time dots')
+
+
+class HasPhotometryTestCase(unittest.TestCase):
+    def setUp(self):
+        self.sn_files = SNFiles(SNS_HAVE_NOT_PHOTOMETRY)
+
+    def test_has_not_photometry(self):
+        for fpath in self.sn_files.filepaths:
+            with self.assertRaises(KeyError,
+                                   msg='{} should not contain photometry and KeyError should be raised'.format(fpath)):
+                SNCurve.from_json(fpath)
 
 
 class HasSpectraTestCase(unittest.TestCase):
