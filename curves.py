@@ -158,25 +158,25 @@ def _transform_to_tuple(value):
 class BadPhotometryDotError(ValueError):
     def __init__(self, sn_name, dot, field=None):
         if field is None:
-            self.message = 'SN {name} has a bad photometry item {dot}'.format(name=sn_name, dot=dot)
+            self.message = '{name} data file has a bad photometry item {dot}'.format(name=sn_name, dot=dot)
         else:
-            self.message = 'SN {name} has a photometry item with bad {field}: {dot}'.format(name=sn_name,
-                                                                                            field=field,
-                                                                                            dot=dot)
+            self.message = '{name} data file has a photometry item with bad {field}: {dot}'.format(name=sn_name,
+                                                                                                   field=field,
+                                                                                                   dot=dot)
         super(BadPhotometryDotError, self).__init__(self.message)
 
 
 class NoPhotometryError(ValueError):
     def __init__(self, sn_name):
-        super(NoPhotometryError, self).__init__("SN {} data file has not field 'photometry'".format(sn_name))
+        super(NoPhotometryError, self).__init__("{} data file has not field 'photometry'".format(sn_name))
 
 
 class EmptyPhotometryError(ValueError):
     def __init__(self, sn_name, bands):
         if bands is None:
-            self.message = 'SN {} has not any photometry observations'.format(sn_name)
+            self.message = '{} data file has not any photometrical observations'.format(sn_name)
         else:
-            self.message = 'SN {} has not any photometry observations for bands {!s}'.format(sn_name, bands)
+            self.message = '{} data file has not any photometrical observations for bands {!s}'.format(sn_name, bands)
         super(EmptyPhotometryError, self).__init__(self.message)
 
 
