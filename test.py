@@ -53,6 +53,10 @@ SNS_HAVE_NOT_PHOTOMETRY = frozenset((
     'GRB 081025A',
 ))
 
+SNS_HAVE_NOT_MAGN_ERRORS = frozenset((
+    'SN2005V',
+))
+
 SNS_ZERO_VALID_PHOTOMETRY_DOTS = frozenset((
     'SN2007bk',
 ))
@@ -283,24 +287,31 @@ class BadPhotometryTestCase(unittest.TestCase):
                                    msg='{} should not contain any valid photometry dot'.format(fpath)):
                 SNCurve.from_json(fpath)
 
-    def test_has_no_observations_for_the_band(self):
+    def test_has_not_observations_for_the_band(self):
         band = 'MDUzZDJ'
         for snname in SNS_ALL_TUPLE:
             with self.assertRaises(EmptyPhotometryError,
-                                   msg='SN {} should not contain any observations in the band {}'.format(snname, band)):
+                                   msg='{} should not contain any observations in the band {}'.format(snname, band)):
                 SNCurve.from_name(snname, bands=band)
+
+    def test_has_not_magn_errors(self):
+        curves = _get_curves(SNS_HAVE_NOT_MAGN_ERRORS)
+        for curve in curves:
+            with self.assertRaises(EmptyPhotometryError,
+                                   msg='{} should not contain finite errors'.format(curve.name)):
+                curve.multi_state_data(with_inf_e_flux=False)
 
 
 class HasSpectraTestCase(unittest.TestCase):
     def test_has_spectra(self):
         curves = _get_curves(SNS_HAVE_SPECTRA)
         for curve in curves:
-            self.assertTrue(curve.has_spectra, 'SN {} data should contain spectra'.format(curve.name))
+            self.assertTrue(curve.has_spectra, '{} data should contain spectra'.format(curve.name))
 
     def test_has_not_spectra(self):
         curves = _get_curves(SNS_HAVE_NOT_SPECTRA)
         for curve in curves:
-            self.assertFalse(curve.has_spectra, 'SN {} data should not contain spectra'.format(curve.name))
+            self.assertFalse(curve.has_spectra, '{} data should not contain spectra'.format(curve.name))
 
 
 class TemporalOrderTestCase(unittest.TestCase):
