@@ -237,7 +237,7 @@ class SNCurve(FrozenOrderedDict):
         self._has_spectra = 'spectra' in self._json
 
         self.ph = self.photometry = self
-        if not 'photometry' in self._json:
+        if 'photometry' not in self._json:
             raise NoPhotometryError(self.name)
         for dot in self._json['photometry']:
             if 'time' in dot and 'band' in dot:
@@ -386,6 +386,10 @@ class SNCurve(FrozenOrderedDict):
         Returns
         -------
         MultiStateData
+
+        Raises
+        ------
+        EmptyPhotometryError
         """
         @lru_cache(maxsize=1)
         def fd():
@@ -415,7 +419,10 @@ class SNCurve(FrozenOrderedDict):
             for band in bands:
                 yield (band, (fd()[band][name] for name in ('time', 'flux', 'e_flux')))
         ph = items_generator()
-        return data_from_items(ph)
+        msd = data_from_items(ph)
+        if not msd.arrays.y.size:
+            raise EmptyPhotometryError(self.name, bands)
+        return msd
 
     @property
     @lru_cache(maxsize=1)
