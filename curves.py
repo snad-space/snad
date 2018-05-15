@@ -195,6 +195,24 @@ class SNCurve(FrozenOrderedDict):
 
     Parameters
     ----------
+    json_data: dict
+        Data from sne.space json
+    bands: iterable of str or str or None, optional
+        Bands to use. It should be iterable of str, comma-separated str, or
+        None. The default is None, all available bands will be used
+    bin_width: float or None, optional
+        The width of samples, in the units of photometry time dots. The edges
+        of the bins will be produced by the formula
+        `time // bin_width * bin_width`. If upper limit dots are not the only
+        dots in the sample, they will be excluded, as the dots with infinite
+        errors. If only upper limit dots are presented, the best will be used,
+        if only infinite error dots are presented, their mean will be used. If
+        any dots with finite errors are presented, then weighed mean and
+        corresponding error is calculated. The default is None, no sampling
+        will be performed.
+
+    Attributes
+    ----------
     photometry: dict {{str: numpy record array}}
         Photometric data in specified bands, dtype is
         `{dtype}` 
@@ -219,7 +237,7 @@ class SNCurve(FrozenOrderedDict):
 
     ScikitLearnData = namedtuple('ScikitLearnData', ('X', 'y', 'y_err', 'y_norm'))
 
-    def __init__(self, json_data, bands=None):
+    def __init__(self, json_data, bands=None, bin_width=None):
         d = dict()
 
         self._json = json_data
@@ -292,7 +310,12 @@ class SNCurve(FrozenOrderedDict):
             if np.any(np.diff(v['time']) < 0):
                 logging.info('Original SN {} data for band {} contains unordered dots'.format(self._name, k))
                 v[:] = v[np.argsort(v['time'])]
+
+            if bin_width is not None:
+                v = d[k] = self._binning(v, bin_width)
+
             v.flags.writeable = False
+
         if sum(len(v) for v in iteritems(d)) == 0:
             raise EmptyPhotometryError(self.name, bands)
 
@@ -305,6 +328,44 @@ class SNCurve(FrozenOrderedDict):
         self.bands = bands
 
         super(SNCurve, self).__init__(((band, d[band]) for band in self.bands))
+
+    @staticmethod
+    def _binning(blc, bin_width):  # blc = band light curve
+        time = np.unique(blc['time'] // bin_width * bin_width)
+        time_idx = np.digitize(blc['time'], time) - 1
+        band_curve = np.empty(shape=time.shape, dtype=blc.dtype)
+        band_curve['time'] = time + 0.5 * bin_width
+        band_curve['e_time'] = 0.5 * bin_width
+        for i, t in enumerate(time):
+            sample = blc[time_idx == i]
+            if np.all(sample['isupperlimit']):
+                best = np.argmin(sample['flux'])
+                band_curve['flux'][i] = sample['flux'][best]
+                band_curve['e_flux'][i] = sample['e_flux'][best]
+                band_curve['isupperlimit'][i] = True
+            elif not np.any(np.isfinite(sample['e_flux'])):
+                sample = sample[~sample['isupperlimit']]
+                band_curve['flux'][i] = np.mean(sample['flux'])
+                band_curve['e_flux'][i] = np.nan
+                band_curve['isupperlimit'][i] = False
+            else:
+                sample = sample[np.logical_not(sample['isupperlimit']) & np.isfinite(sample['e_flux'])]
+                weight = 1 / sample['e_flux'] ** 2
+                sum_weight = np.sum(weight)
+                flux = np.sum(weight * sample['flux']) / sum_weight
+                if sample.size == 1:
+                    e_flux = sample['e_flux'][0]
+                else:
+                    sgm_mean = np.sqrt(np.sum(weight * (sample['flux'] - flux) ** 2) / sum_weight / (sample.size - 1))
+                    typical_e_flux = 1 / np.sqrt(sum_weight)
+                    if typical_e_flux > sgm_mean:
+                        e_flux = 0.5 * (sgm_mean + typical_e_flux)
+                    else:
+                        e_flux = sgm_mean
+                band_curve['flux'][i] = flux
+                band_curve['e_flux'][i] = e_flux
+                band_curve['isupperlimit'][i] = False
+        return band_curve
 
     @classmethod
     def from_json(cls, filename, snname=None, **kwargs):
@@ -378,10 +439,11 @@ class SNCurve(FrozenOrderedDict):
                 - 'default' will keep the order of `bands`
                 - 'alphabetic' or 'alpha' will sort `bands` alphabetically
                 - 'total' will sort `bands` by the total number of photometric
-                  points
+                  points, from maximum to minimum
                 - 'filtered' will sort `bands` by the number of returned
-                  photometric points, e.g. points filtered by
-                  `with_upper_limits` and `with_inf_e_flux` arguments
+                  photometric points from maximum to minimum, e.g. points
+                  filtered by `with_upper_limits` and `with_inf_e_flux`
+                  arguments
 
         Returns
         -------
