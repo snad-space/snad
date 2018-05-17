@@ -1,0 +1,224 @@
+{
+	"test_binning": {
+		"schema": "https://github.com/astrocatalogs/supernovae/blob/5d080fc/SCHEMA.md",
+		"name": "test_binning",
+		"photometry": [
+			{
+				"time": "0.2",
+				"band": "X",
+				"magnitude": "0.0",
+				"upperlimit": true,
+                "countrate": "1.0"
+			},
+			{
+				"time": "0.6",
+				"band": "X",
+				"magnitude": "-1.25",
+				"upperlimit": true,
+                "countrate": "10.0"
+			},
+			{
+				"time": "0.8",
+				"band": "X",
+				"magnitude": "-2.5",
+				"upperlimit": true,
+                "countrate": "100.0"
+			},
+
+			{
+				"time": "1.2",
+				"band": "X",
+				"magnitude": "0.0",
+				"countrate": "1.0"
+			},
+			{
+				"time": "1.6",
+				"band": "X",
+				"magnitude": "0.1143937264016878",
+				"countrate": "0.9"
+			},
+			{
+				"time": "1.8",
+				"band": "X",
+				"magnitude": "-0.1034817128955627",
+				"countrate": "1.1"
+			},
+
+			{
+				"time": "2.2",
+				"band": "X",
+				"magnitude": "0.0",
+				"e_magnitude": "0.21714724095162588",
+				"countrate": "1.0",
+				"e_countrate": "0.2"
+			},
+			{
+				"time": "2.6",
+				"band": "X",
+				"magnitude": "0.1143937264016878",
+				"e_magnitude": "0.2412747121684732",
+				"countrate": "0.9",
+				"e_countrate": "0.2"
+			},
+			{
+				"time": "2.8",
+				"band": "X",
+				"magnitude": "-0.1034817128955627",
+				"e_magnitude": "0.19740658268329625",
+				"countrate": "1.1",
+				"e_countrate": "0.2"
+			},
+
+			{
+				"time": "3.2",
+				"band": "X",
+				"magnitude": "0.0",
+				"e_magnitude": "0.21714724095162588",
+				"countrate": "1.0",
+				"e_countrate": "0.2"
+			},
+			{
+				"time": "3.6",
+				"band": "X",
+				"magnitude": "0.1143937264016878",
+				"e_magnitude": "0.2412747121684732",
+				"countrate": "0.9",
+				"e_countrate": "0.2"
+			},
+			{
+				"time": "3.8",
+				"band": "X",
+				"magnitude": "-0.1034817128955627",
+				"e_magnitude": "0.19740658268329625",
+				"countrate": "1.1",
+				"e_countrate": "0.2"
+			},
+			{
+				"time": "3.4",
+				"band": "X",
+				"magnitude": "-2.5",
+				"e_magnitude": "1.031449394520223",
+				"countrate": "10.0",
+				"e_countrate": "9.5"
+			},
+
+            
+			{
+				"time": "4.2",
+				"band": "X",
+				"magnitude": "0.0",
+				"e_magnitude": "0.21714724095162588",
+				"countrate": "1.0",
+				"e_countrate": "0.2"
+			},
+			{
+				"time": "4.6",
+				"band": "X",
+				"magnitude": "0.1143937264016878",
+				"e_magnitude": "0.2412747121684732",
+				"countrate": "0.9",
+				"e_countrate": "0.2"
+			},
+			{
+				"time": "4.8",
+				"band": "X",
+				"magnitude": "-0.1034817128955627",
+				"e_magnitude": "0.19740658268329625",
+				"countrate": "1.1",
+				"e_countrate": "0.2"
+			},
+            {
+				"time": "4.2",
+				"band": "X",
+				"magnitude": "-2.5",
+				"e_magnitude": "0.021714724095162588",
+				"countrate": "10.0",
+				"e_countrate": "0.2"
+			},
+			{
+				"time": "4.6",
+				"band": "X",
+				"magnitude": "-2.4890879864938746",
+				"e_magnitude": "0.021934064742588473",
+				"countrate": "9.9",
+				"e_countrate": "0.2"
+			},
+			{
+				"time": "4.8",
+				"band": "X",
+				"magnitude": "-2.510803434456607",
+				"e_magnitude": "0.021499726826893654",
+				"countrate": "10.1",
+				"e_countrate": "0.2"
+			},
+
+            {
+				"time": "5.2",
+				"band": "X",
+				"magnitude": "0.0",
+				"upperlimit": true,
+                "countrate": "1.0"
+			},
+            {
+				"time": "5.8",
+				"band": "X",
+				"magnitude": "-0.1034817128955627",
+				"countrate": "1.1"
+			},
+
+            {
+				"time": "6.2",
+				"band": "X",
+				"magnitude": "0.0",
+				"upperlimit": true,
+                "countrate": "1.0"
+			},
+			{
+				"time": "6.8",
+				"band": "X",
+				"magnitude": "0.0",
+				"e_magnitude": "0.21714724095162588",
+				"countrate": "1.0",
+				"e_countrate": "0.2"
+			},
+
+            {
+				"time": "7.2",
+				"band": "X",
+				"magnitude": "-0.1034817128955627",
+				"countrate": "1.1"
+			},
+			{
+				"time": "7.8",
+				"band": "X",
+				"magnitude": "0.0",
+				"e_magnitude": "0.21714724095162588",
+				"countrate": "1.0",
+				"e_countrate": "0.2"
+			},
+
+
+            {
+				"time": "8.2",
+				"band": "X",
+				"magnitude": "0.0",
+				"upperlimit": true,
+                "countrate": "1.0"
+			},
+            {
+				"time": "8.6",
+				"band": "X",
+				"magnitude": "-0.1034817128955627",
+				"countrate": "1.1"
+			},
+			{
+				"time": "8.8",
+				"band": "X",
+				"magnitude": "0.0",
+				"e_magnitude": "0.21714724095162588",
+				"countrate": "1.0",
+				"e_countrate": "0.2"
+			}
+		]
+	}
+}
