@@ -2,13 +2,13 @@ import json
 import logging
 import os
 import sys
-from collections import Iterable, Mapping, namedtuple, OrderedDict
+from collections import Iterable, namedtuple
 
 import numpy as np
 import requests
 from multistate_kernel.util import FrozenOrderedDict, data_from_items
 from six import binary_type
-from six import iteritems, iterkeys, itervalues
+from six import iteritems, iterkeys
 from six.moves import urllib
 from six.moves import UserList
 
@@ -295,6 +295,8 @@ class SNCurve(FrozenOrderedDict):
                         raise BadPhotometryDotError(self.name, dot, 'e_magnitude')
                     if not np.isfinite(e_flux):
                         raise BadPhotometryDotError(self.name, dot)
+                    if e_magn == 0:
+                        e_flux = np.nan
                 else:
                     e_flux = np.nan
 
@@ -310,10 +312,8 @@ class SNCurve(FrozenOrderedDict):
             if np.any(np.diff(v['time']) < 0):
                 logging.info('Original SN {} data for band {} contains unordered dots'.format(self._name, k))
                 v[:] = v[np.argsort(v['time'])]
-
             if bin_width is not None:
                 v = d[k] = self._binning(v, bin_width)
-
             v.flags.writeable = False
 
         if sum(len(v) for v in iteritems(d)) == 0:

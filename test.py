@@ -13,7 +13,7 @@ from tempfile import mkdtemp, NamedTemporaryFile
 import numpy as np
 import pandas
 import six
-from six import BytesIO
+from six import BytesIO, iteritems, itervalues
 from numpy.testing import assert_allclose, assert_equal
 
 try:
@@ -50,6 +50,10 @@ SNS_UNORDERED_PHOTOMETRY = frozenset((
     'PS1-10ahf',
 ))
 
+SNS_HAVE_ZERO_E_MAGNITUDE = frozenset((
+    'Gaia14ado',
+))
+
 SNS_HAVE_NOT_PHOTOMETRY = frozenset((
     'GRB 081025A',
 ))
@@ -75,7 +79,7 @@ SNS_HAVE_B_BAND = frozenset((
 ))
 
 SNS_ALL = frozenset.union(SNS_NO_CMAIMED_TYPE, SNS_UPPER_LIMIT, SNS_E_LOWER_UPPER_MAGNITUDE, SNE_E_TIME,
-                          SNS_UNORDERED_PHOTOMETRY, SNS_HAVE_B_BAND)
+                          SNS_UNORDERED_PHOTOMETRY, SNS_HAVE_ZERO_E_MAGNITUDE, SNS_HAVE_B_BAND)
 SNS_ALL_TUPLE = tuple(sorted(SNS_ALL))
 
 
@@ -331,6 +335,26 @@ class TemporalOrderTestCase(unittest.TestCase):
             with self.assertLogs(level=logging.INFO):
                 curve = SNCurve.from_json(fpath)
             del curve
+
+
+class HasZeroEMagnitudeTestCase(unittest.TestCase):
+    def setUp(self):
+        self.curves = _get_curves(SNS_HAVE_ZERO_E_MAGNITUDE)
+
+    def test_has_infinite_errors(self):
+        for curve in self.curves:
+            for blc in itervalues(curve):
+                if np.any(~np.isfinite(blc['e_flux'])):
+                    break
+            else:
+                assert False, '{} data should contain infinite errors'
+
+    def test_have_only_positive_errors(self):
+        for curve in self.curves:
+            for band, blc in iteritems(curve):
+                e_flux = blc['e_flux']
+                self.assertTrue(np.all(e_flux[np.isfinite(e_flux)] > 0),
+                                msg='{} in band {} has non-positive errors'.format(curve.name, band))
 
 
 class LightCurveLearningDataTestCase(unittest.TestCase):
