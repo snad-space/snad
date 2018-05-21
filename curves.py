@@ -235,8 +235,6 @@ class SNCurve(FrozenOrderedDict):
         Raises if any used photometry dot contains bad data  
     """.format(dtype=__photometry_dtype)
 
-    ScikitLearnData = namedtuple('ScikitLearnData', ('X', 'y', 'y_err', 'y_norm'))
-
     def __init__(self, json_data, bands=None, bin_width=None):
         d = dict()
 
