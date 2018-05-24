@@ -156,6 +156,29 @@ def _transform_to_tuple(value):
     return tuple(value)
 
 
+def _mean_sigma(y, weight):
+    if y.size == 1:
+        return y[0], np.nan
+    mean, sum_weight = np.average(y, weights=weight, returned=True)
+    sgm_mean = np.sqrt(np.sum(weight * (y - mean) ** 2) / sum_weight / (y.size - 1))
+    return mean, sgm_mean
+
+
+def _typical_err(err):
+    return 1 / np.sqrt(np.sum(1 / err**2))
+
+
+def _mean_error(y, err):
+    if y.size == 1:
+        return y[0], err[0]
+    weight = 1 / err**2
+    mean, sgm_mean = _mean_sigma(y, weight)
+    typical_err = _typical_err(err)
+    if typical_err > sgm_mean:
+        return mean, 0.5 * (sgm_mean + typical_err)
+    return mean, sgm_mean
+
+
 class BadPhotometryDotError(ValueError):
     def __init__(self, sn_name, dot, field=None):
         if field is None:
@@ -235,20 +258,25 @@ class SNCurve(MultiStateData):
         self.is_filtered = is_filtered
         self.bands = self._keys_tuple
 
-    def binned(self, bin_width, bands=None):
+    def binned(self, bin_width, discrete_time=False, bands=None):
         """Binned photometry data
+
+        The eges of the bins will be produced by the formula
+        `time // bin_width * bin_width`. If upper limit dots are not the
+        only dots in the sample, they will be excluded, as the dots with
+        infinite errors. If only upper limit dots are presented, the best will
+        be used, if only infinite error dots are presented, their mean will be
+        used. If any dots with finite errors are presented, then weighed mean
+        and corresponding error is calculated. For `discrete_time=True`
+        original time errors `err_x` are ignored.
 
         Parameters
         ----------
         bin_width: float or None, optional
-            The width of samples, in the units of photometry time dots. The
-            edges of the bins will be produced by the formula
-            `time // bin_width * bin_width`. If upper limit dots are not the
-            only dots in the sample, they will be excluded, as the dots with
-            infinite errors. If only upper limit dots are presented, the best
-            will be used, if only infinite error dots are presented, their
-            mean will be used. If any dots with finite errors are presented,
-            then weighed mean and corresponding error is calculated.
+            The width of samples, in the units of photometry time dots
+        discrete_time: bool, optional
+            If `True`, all time steps between dots will be a multiple of
+            `bin_width`, else weighted time moments will be used
         bands: iterable of str or None, optional
             Bands to use. Default is None, SNCurve.bands will be used
 
@@ -266,46 +294,43 @@ class SNCurve(MultiStateData):
             bands = _transform_to_tuple(bands)
         if set(bands).difference(self.bands):
             raise EmptyPhotometryError(self.name, set(bands) - set(self.bands))
-        msd = MultiStateData.from_state_data((band, self._binning(self[band], bin_width)) for band in bands)
+        msd = MultiStateData.from_state_data((band, self._binning(self[band], bin_width, discrete_time))
+                                             for band in bands)
         return SNCurve(msd,
                        name=self.name, has_spectra=self.has_spectra, claimed_type=self.claimed_type,
                        is_binned=True, is_filtered=self.is_filtered)
 
     @staticmethod
-    def _binning(blc, bin_width):  # blc = band light curve
+    def _binning(blc, bin_width, discrete_time):  # blc = band light curve
         time = np.unique(blc['x'] // bin_width * bin_width)
         time_idx = np.digitize(blc['x'], time) - 1
         band_curve = np.recarray(shape=time.shape, dtype=blc.dtype)
-        band_curve['x'] = time + 0.5 * bin_width
-        band_curve['err_x'] = 0.5 * bin_width
+        if discrete_time:
+            band_curve['x'] = time + 0.5 * bin_width
+            band_curve['err_x'] = 0.5 * bin_width
         for i, t in enumerate(time):
             sample = blc[time_idx == i]
             if np.all(sample['isupperlimit']):
                 best = np.argmin(sample['y'])
+                if not discrete_time:
+                    band_curve['x'][i] = sample['x'][best]
+                    band_curve['err_x'][i] = sample['err_x'][best]
                 band_curve['y'][i] = sample['y'][best]
                 band_curve['err'][i] = sample['err'][best]
                 band_curve['isupperlimit'][i] = True
             elif not np.any(np.isfinite(sample['err'])):
                 sample = sample[~sample['isupperlimit']]
+                if not discrete_time:
+                    band_curve['x'][i], band_curve['err_x'][i] = _mean_sigma(sample['x'], np.ones_like(sample['x']))
                 band_curve['y'][i] = np.mean(sample['y'])
                 band_curve['err'][i] = np.nan
                 band_curve['isupperlimit'][i] = False
             else:
                 sample = sample[np.logical_not(sample['isupperlimit']) & np.isfinite(sample['err'])]
-                weight = 1 / sample['err'] ** 2
-                sum_weight = np.sum(weight)
-                flux = np.sum(weight * sample['y']) / sum_weight
-                if sample.size == 1:
-                    e_flux = sample['err'][0]
-                else:
-                    sgm_mean = np.sqrt(np.sum(weight * (sample['y'] - flux) ** 2) / sum_weight / (sample.size - 1))
-                    typical_e_flux = 1 / np.sqrt(sum_weight)
-                    if typical_e_flux > sgm_mean:
-                        e_flux = 0.5 * (sgm_mean + typical_e_flux)
-                    else:
-                        e_flux = sgm_mean
-                band_curve['y'][i] = flux
-                band_curve['err'][i] = e_flux
+                if not discrete_time:
+                    weight = 1 / sample['err'] ** 2
+                    band_curve['x'][i], band_curve['err_x'][i] = _mean_sigma(sample['x'], weight)
+                band_curve['y'][i], band_curve['err'][i] = _mean_error(sample['y'], sample['err'])
                 band_curve['isupperlimit'][i] = False
         return band_curve
 

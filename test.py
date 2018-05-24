@@ -380,7 +380,8 @@ class LightCurveBinningTestCase(unittest.TestCase):
         self.bin_width = 1
         osc_curve = OSCCurve.from_json(BINNING_JSON_PATH)
         self.curve = osc_curve[self.band]
-        self.binned_curve = osc_curve.binned(bin_width=1)[self.band]
+        self.binned_curve = osc_curve.binned(bin_width=1, discrete_time=False)[self.band]
+        self.binned_curve_discrete = osc_curve.binned(bin_width=1, discrete_time=True)[self.band]
 
     def sample_and_binned(self, t):
         sample_idx = (self.curve['x'] >= t) & (self.curve['x'] < t+1)
@@ -388,13 +389,17 @@ class LightCurveBinningTestCase(unittest.TestCase):
         binned = self.binned_curve[t]
         return sample, binned
 
+    def test_all_discrete_time(self):
+        assert_allclose(self.time + 0.5 * self.bin_width, self.binned_curve_discrete['x'])
+        assert_allclose(0.5 * self.bin_width, self.binned_curve_discrete['err_x'])
+
     def test_all_upper_limits(self):
         t = self.time[0]
         sample, binned = self.sample_and_binned(t)
-        expected = sample[np.argmin(sample['y'])].copy()
+        expected = sample[np.argmin(sample['y'])]
 
-        assert_allclose(t + 0.5 * self.bin_width, binned['x'])
-        assert_allclose(0.5 * self.bin_width, binned['err_x'])
+        assert_allclose(expected['x'], binned['x'])
+        assert_allclose(expected['err_x'], binned['err_x'])
         self.assertEqual(expected['y'], binned['y'])
         assert_allclose(expected['err'], binned['err'], rtol=0, atol=0, equal_nan=True)
         self.assertTrue(binned['isupperlimit'])
@@ -402,10 +407,12 @@ class LightCurveBinningTestCase(unittest.TestCase):
     def test_all_without_errors(self):
         t = self.time[1]
         sample, binned = self.sample_and_binned(t)
+        expected_time = np.mean(sample['x'])
+        expected_e_time = np.std(sample['x']) / np.sqrt(sample.size - 1)
         expected_flux = np.mean(sample['y'])
 
-        assert_allclose(t + 0.5 * self.bin_width, binned['x'])
-        assert_allclose(0.5 * self.bin_width, binned['err_x'])
+        assert_allclose(expected_time, binned['x'])
+        assert_allclose(expected_e_time, binned['err_x'])
         assert_allclose(expected_flux, binned['y'])
         self.assertTrue(np.isnan(binned['err']))
         self.assertFalse(binned['isupperlimit'])
@@ -424,11 +431,13 @@ class LightCurveBinningTestCase(unittest.TestCase):
                                 or lower <= d1['y'] + d1['err'] <= upper)
         assert_allclose(np.diff(sample['err']), 0, atol=1e-2*np.min(sample['err']))
 
+        expected_time = np.mean(sample['x'])
+        expected_e_time = np.std(sample['x']) / np.sqrt(sample.size - 1)
         expected_flux = np.mean(sample['y'])
         expected_min_err = 1 / np.sum(1 / sample['err']**2)
 
-        assert_allclose(t + 0.5 * self.bin_width, binned['x'])
-        assert_allclose(0.5 * self.bin_width, binned['err_x'])
+        assert_allclose(expected_time, binned['x'])
+        assert_allclose(expected_e_time, binned['err_x'])
         assert_allclose(expected_flux, binned['y'])
         assert_allclose(1.0000000000000002, binned['y'])
         self.assertLessEqual(expected_min_err, binned['err'])
@@ -456,14 +465,16 @@ class LightCurveBinningTestCase(unittest.TestCase):
                 self.assertTrue(lower <= d1['y'] - d1['err'] <= upper
                                 or lower <= d1['y'] + d1['err'] <= upper)
 
+        expected_time = np.average(sample['x'], weights=1/sample['err']**2)
+        expected_min_e_time = np.std(sample['x']) / np.sqrt(sample.size - 1)
         expected_min_flux = np.mean(close_dots['y'])
         expected_max_flux = bad['y']
         expected_min_err1 = 1 / np.sum(1 / close_dots['err']**2)
         expected_min_err2 = np.sqrt(np.sum((sample['y'] - np.mean(sample['y']))**2) / (sample.size - 1))
         expected_min_err = min(expected_min_err1, expected_min_err2)
 
-        assert_allclose(t + 0.5 * self.bin_width, binned['x'])
-        assert_allclose(0.5 * self.bin_width, binned['err_x'])
+        assert_allclose(expected_time, binned['x'])
+        self.assertLess(expected_min_e_time, binned['err_x'])
         self.assertLessEqual(expected_min_flux, binned['y'])
         assert_allclose(1.0013294434801876, binned['y'])
         self.assertGreaterEqual(expected_max_flux, binned['y'])
@@ -494,13 +505,15 @@ class LightCurveBinningTestCase(unittest.TestCase):
                                     or lower <= d1['y'] + d1['err'] <= upper)
         assert_allclose(np.diff(sample['err']), 0, atol=1e-2 * np.min(sample['err']))
 
+        expected_time = np.mean(sample['x'])
+        expected_e_time = np.std(sample['x']) / np.sqrt(sample.size - 1)
         expected_flux = np.mean(sample['y'])
         expected_min_flux = np.mean(lower_group['y'])
         expected_max_flux = np.mean(upper_group['y'])
         expected_err = np.sqrt(np.sum((sample['y']-np.mean(sample['y']))**2) / sample.size / (sample.size-1))
 
-        assert_allclose(t + 0.5 * self.bin_width, binned['x'])
-        assert_allclose(0.5 * self.bin_width, binned['err_x'])
+        assert_allclose(expected_time, binned['x'])
+        assert_allclose(expected_e_time, binned['err_x'])
         assert_allclose(expected_flux, binned['y'])
         assert_allclose(5.500000000000001, binned['y'])
         self.assertLess(expected_min_flux, binned['y'])
@@ -520,8 +533,8 @@ class LightCurveBinningTestCase(unittest.TestCase):
         # Check test data
         self.assertLess(upper_limit['y'], dot['y'])
 
-        assert_allclose(t + 0.5 * self.bin_width, binned['x'])
-        assert_allclose(0.5 * self.bin_width, binned['err_x'])
+        self.assertEqual(dot['x'], binned['x'])
+        assert_allclose(dot['err_x'], binned['err_x'], equal_nan=True)
         self.assertEqual(dot['y'], binned['y'])
         self.assertTrue(np.isnan(binned['err']))
         self.assertFalse(binned['isupperlimit'])
@@ -534,8 +547,8 @@ class LightCurveBinningTestCase(unittest.TestCase):
         self.assertEqual(upper_limit.size, 1)
         dot = sample[~sample['isupperlimit']][0]
 
-        assert_allclose(t + 0.5 * self.bin_width, binned['x'])
-        assert_allclose(0.5 * self.bin_width, binned['err_x'])
+        self.assertTrue(dot['x'], binned['x'])
+        assert_allclose(dot['err_x'], binned['err_x'], equal_nan=True)
         self.assertEqual(dot['y'], binned['y'])
         self.assertEqual(dot['err'], binned['err'])
         self.assertFalse(binned['isupperlimit'])
@@ -552,8 +565,8 @@ class LightCurveBinningTestCase(unittest.TestCase):
         self.assertEqual(dot.size, 1)
         dot = dot[0]
 
-        assert_allclose(t + 0.5 * self.bin_width, binned['x'])
-        assert_allclose(0.5 * self.bin_width, binned['err_x'])
+        self.assertTrue(dot['x'], binned['x'])
+        assert_allclose(dot['err_x'], binned['err_x'], equal_nan=True)
         self.assertEqual(dot['y'], binned['y'])
         self.assertEqual(dot['err'], binned['err'])
         self.assertFalse(binned['isupperlimit'])
@@ -566,8 +579,8 @@ class LightCurveBinningTestCase(unittest.TestCase):
         self.assertEqual(np.sum(~sample['isupperlimit'] & ~np.isfinite(sample['err'])), 1)
         dot = sample[~sample['isupperlimit'] & np.isfinite(sample['err'])][0]
 
-        assert_allclose(t + 0.5 * self.bin_width, binned['x'])
-        assert_allclose(0.5 * self.bin_width, binned['err_x'])
+        self.assertTrue(dot['x'], binned['x'])
+        assert_allclose(dot['err_x'], binned['err_x'], equal_nan=True)
         self.assertEqual(dot['y'], binned['y'])
         self.assertEqual(dot['err'], binned['err'])
         self.assertFalse(binned['isupperlimit'])
