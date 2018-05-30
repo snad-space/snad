@@ -403,6 +403,9 @@ class SNCurve(MultiStateData):
                        name=self.name, has_spectra=self.has_spectra, claimed_type=self.claimed_type,
                        is_binned=self.is_binned, is_filtered=True)
 
+    def convert_arrays(self, x, y, err):
+        return MultiStateData.from_arrays(x, y, err, self.norm, keys=self.keys())
+
     @property
     def X(self):
         return self.arrays.x
