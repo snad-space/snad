@@ -11,7 +11,6 @@ from functools import reduce
 from tempfile import mkdtemp, NamedTemporaryFile
 
 import numpy as np
-import pandas
 import six
 from six import BytesIO, iteritems, itervalues
 from numpy.testing import assert_allclose, assert_equal
@@ -212,9 +211,10 @@ class SNFilesOfflineMode(BasicSNFilesTestCase):
 
 class LoadSNListFromCSV(unittest.TestCase):
     def test_csv_download(self):
-        table = pandas.DataFrame(data=list(SNS_ALL), columns=['Name'])
         with NamedTemporaryFile(mode='w+', suffix='.csv') as fd:
-            table.to_csv(fd.name)
+            with open(fd.name, 'w') as f:
+                f.write('Name\n')
+                f.write('\n'.join(SNS_ALL))
             sn_files = SNFiles(fd.name)
             self.assertEqual(set(sn_files), SNS_ALL)
 
