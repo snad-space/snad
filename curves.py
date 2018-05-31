@@ -60,9 +60,13 @@ class SNPaths(UserList):
     def _names_from_csvfile(filename):
         """Get SN names from the `Name` column of CSV file. Such a file can
         be obtained from https://sne.space"""
-        from pandas import read_csv
-        data = read_csv(filename)
-        return data.Name.as_matrix()
+        from csv import reader
+        with open(filename) as fd:
+            csv_reader = reader(fd)
+            fields = next(csv_reader)
+            i = fields.index('Name')
+            sn_names = [row[i] for row in csv_reader]
+        return sn_names
 
 
 class SNFiles(SNPaths):
