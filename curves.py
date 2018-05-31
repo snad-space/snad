@@ -247,8 +247,8 @@ class SNCurve(MultiStateData):
     def __init__(self, multi_state_data, name,
                  is_binned=False, is_filtered=False,
                  additional_attrs=FrozenOrderedDict()):
-        for name, value in iteritems(additional_attrs):
-            self.__setattr__(name, value)
+        for attr_name, attr_value in iteritems(additional_attrs):
+            self.__setattr__(attr_name, attr_value)
         super(SNCurve, self).__init__(multi_state_data.odict, multi_state_data.arrays)
         self.name = name
         self.is_binned = is_binned
