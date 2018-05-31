@@ -2,13 +2,14 @@ import json
 import logging
 import os
 import sys
-from collections import Iterable, namedtuple
+from collections import Iterable
+from copy import deepcopy
 
 import numpy as np
 import requests
-from multistate_kernel.util import FrozenOrderedDict, data_from_items
+from multistate_kernel.util import MultiStateData
 from six import binary_type
-from six import iteritems, iterkeys
+from six import iteritems, iterkeys, itervalues
 from six.moves import urllib
 from six.moves import UserList
 
@@ -155,6 +156,29 @@ def _transform_to_tuple(value):
     return tuple(value)
 
 
+def _mean_sigma(y, weight):
+    if y.size == 1:
+        return y[0], np.nan
+    mean, sum_weight = np.average(y, weights=weight, returned=True)
+    sgm_mean = np.sqrt(np.sum(weight * (y - mean) ** 2) / sum_weight / (y.size - 1))
+    return mean, sgm_mean
+
+
+def _typical_err(err):
+    return 1 / np.sqrt(np.sum(1 / err**2))
+
+
+def _mean_error(y, err):
+    if y.size == 1:
+        return y[0], err[0]
+    weight = 1 / err**2
+    mean, sgm_mean = _mean_sigma(y, weight)
+    typical_err = _typical_err(err)
+    if typical_err > sgm_mean:
+        return mean, 0.5 * (sgm_mean + typical_err)
+    return mean, sgm_mean
+
+
 class BadPhotometryDotError(ValueError):
     def __init__(self, sn_name, dot, field=None):
         if field is None:
@@ -180,14 +204,15 @@ class EmptyPhotometryError(ValueError):
         super(EmptyPhotometryError, self).__init__(self.message)
 
 
-class SNCurve(FrozenOrderedDict):
-    __photometry_dtype = [
-        ('time', np.float),
-        ('e_time', np.float),
-        ('flux', np.float),
-        ('e_flux', np.float),
+class SNCurve(MultiStateData):
+    _photometry_dtype = [
+        ('x', np.float),
+        ('err_x', np.float),
+        ('y', np.float),
+        ('err', np.float),
         ('isupperlimit', np.bool)
     ]
+
     __doc__ = """SN photometric data.
 
     Represent photometric data of SN in specified bands and some additional
@@ -195,27 +220,23 @@ class SNCurve(FrozenOrderedDict):
 
     Parameters
     ----------
-    json_data: dict
-        Data from sne.space json
-    bands: iterable of str or str or None, optional
-        Bands to use. It should be iterable of str, comma-separated str, or
-        None. The default is None, all available bands will be used
-    bin_width: float or None, optional
-        The width of samples, in the units of photometry time dots. The edges
-        of the bins will be produced by the formula
-        `time // bin_width * bin_width`. If upper limit dots are not the only
-        dots in the sample, they will be excluded, as the dots with infinite
-        errors. If only upper limit dots are presented, the best will be used,
-        if only infinite error dots are presented, their mean will be used. If
-        any dots with finite errors are presented, then weighed mean and
-        corresponding error is calculated. The default is None, no sampling
-        will be performed.
+    multi_state_data: MultiStateData
+        Photometry data, where `x` represents time, `y` represents flux, `err`
+        represents error of flux. Its `odict` attribute should contain
+        `numpy.recarray` with dtype `{}`
+    name: str
+        SN name
+    has_spectra: bool
+        Is initial data have any spectrum
+    claimed_type: str or None
+        Claimed SN type or None
+    is_binned: bool
+        Is initial data were binned
+    is_filtered: bool
+        Is initial data were filtered
 
     Attributes
     ----------
-    photometry: dict {{str: numpy record array}}
-        Photometric data in specified bands, dtype is
-        `{dtype}` 
     name: string
         SN name.
     claimed_type: string or None
@@ -224,7 +245,245 @@ class SNCurve(FrozenOrderedDict):
         Photometric bands that are appeared in `photometry`.
     has_spectra: bool
         Is there spectral data in original json
-    
+    """.format(_photometry_dtype)
+
+    def __init__(self, multi_state_data, name,
+                 has_spectra=False, claimed_type=None,
+                 is_binned=False, is_filtered=False):
+        super(SNCurve, self).__init__(multi_state_data.odict, multi_state_data.arrays)
+        self.name = name
+        self.has_spectra = has_spectra
+        self.claimed_type = claimed_type
+        self.is_binned = is_binned
+        self.is_filtered = is_filtered
+        self.bands = self._keys_tuple
+
+    def binned(self, bin_width, discrete_time=False, bands=None):
+        """Binned photometry data
+
+        The eges of the bins will be produced by the formula
+        `time // bin_width * bin_width`. If upper limit dots are not the
+        only dots in the sample, they will be excluded, as the dots with
+        infinite errors. If only upper limit dots are presented, the best will
+        be used, if only infinite error dots are presented, their mean will be
+        used. If any dots with finite errors are presented, then weighed mean
+        and corresponding error is calculated. For `discrete_time=True`
+        original time errors `err_x` are ignored.
+
+        Parameters
+        ----------
+        bin_width: float or None, optional
+            The width of samples, in the units of photometry time dots
+        discrete_time: bool, optional
+            If `True`, all time steps between dots will be a multiple of
+            `bin_width`, else weighted time moments will be used
+        bands: iterable of str or None, optional
+            Bands to use. Default is None, SNCurve.bands will be used
+
+        Returns
+        -------
+        SNCurve
+
+        Raises
+        ------
+        EmptyPhotometryError
+        """
+        if bands is None:
+            bands = self.bands
+        else:
+            bands = _transform_to_tuple(bands)
+        if set(bands).difference(self.bands):
+            raise EmptyPhotometryError(self.name, set(bands) - set(self.bands))
+        msd = MultiStateData.from_state_data((band, self._binning(self[band], bin_width, discrete_time))
+                                             for band in bands)
+        return SNCurve(msd,
+                       name=self.name, has_spectra=self.has_spectra, claimed_type=self.claimed_type,
+                       is_binned=True, is_filtered=self.is_filtered)
+
+    @staticmethod
+    def _binning(blc, bin_width, discrete_time):  # blc = band light curve
+        time = np.unique(blc['x'] // bin_width * bin_width)
+        time_idx = np.digitize(blc['x'], time) - 1
+        band_curve = np.recarray(shape=time.shape, dtype=blc.dtype)
+        if discrete_time:
+            band_curve['x'] = time + 0.5 * bin_width
+            band_curve['err_x'] = 0.5 * bin_width
+        for i, t in enumerate(time):
+            sample = blc[time_idx == i]
+            if np.all(sample['isupperlimit']):
+                best = np.argmin(sample['y'])
+                if not discrete_time:
+                    band_curve['x'][i] = sample['x'][best]
+                    band_curve['err_x'][i] = sample['err_x'][best]
+                band_curve['y'][i] = sample['y'][best]
+                band_curve['err'][i] = sample['err'][best]
+                band_curve['isupperlimit'][i] = True
+            elif not np.any(np.isfinite(sample['err'])):
+                sample = sample[~sample['isupperlimit']]
+                if not discrete_time:
+                    band_curve['x'][i], band_curve['err_x'][i] = _mean_sigma(sample['x'], np.ones_like(sample['x']))
+                band_curve['y'][i] = np.mean(sample['y'])
+                band_curve['err'][i] = np.nan
+                band_curve['isupperlimit'][i] = False
+            else:
+                sample = sample[np.logical_not(sample['isupperlimit']) & np.isfinite(sample['err'])]
+                if not discrete_time:
+                    weight = 1 / sample['err'] ** 2
+                    band_curve['x'][i], band_curve['err_x'][i] = _mean_sigma(sample['x'], weight)
+                band_curve['y'][i], band_curve['err'][i] = _mean_error(sample['y'], sample['err'])
+                band_curve['isupperlimit'][i] = False
+        return band_curve
+
+    def filtered(self, with_upper_limits=False, with_inf_e_flux=False, bands=None, sort='default'):
+        """Filtered and sorted by bands SNCurve
+
+        Parameters
+        ----------
+        with_upper_limits: bool, optional
+            Include observation point marked as an upper limit
+        with_inf_e_flux: bool, optional
+            Include observation point with infinity/NaN error
+        bands: iterable of str or str or None, optional
+            Bands to return. Default is None, SNCurves.bands will be used
+        sort: str, optional
+            How `bands` will be sorted. Should be one of the following
+            strings:
+
+                - 'default' will keep the order of `bands`
+                - 'alphabetic' or 'alpha' will sort `bands` alphabetically
+                - 'total' will sort `bands` by the total number of photometric
+                  points, from maximum to minimum
+                - 'filtered' will sort `bands` by the number of returned
+                  photometric points from maximum to minimum, e.g. points
+                  filtered by `with_upper_limits` and `with_inf_e_flux`
+                  arguments
+
+        Returns
+        -------
+        SNCurve
+
+        Raises
+        ------
+        EmptyPhotometryError
+        """
+        if bands is None:
+            bands = self.bands
+        else:
+            bands = _transform_to_tuple(bands)
+
+        if (with_upper_limits
+                and with_inf_e_flux
+                and (bands is None or bands == self.bands)
+                and sort == 'default'):
+            return self
+
+        @lru_cache(maxsize=1)
+        def fd():
+            if with_upper_limits and with_inf_e_flux:  # Little optimization
+                return self.odict
+            return {band: self[band][(np.logical_not(self[band]['isupperlimit']) + with_upper_limits)
+                                     & (np.isfinite(self[band]['err']) + with_inf_e_flux)]
+                    for band in bands}
+
+        if sort == 'default':
+            pass
+        elif sort == 'alphabetic' or sort == 'alpha':
+            bands = sorted(bands)
+        elif sort == 'total':
+            bands = sorted(bands, key=lambda band: self[band].size, reverse=True)
+        elif sort == 'filtered':
+            bands = sorted(bands, key=lambda band: fd()[band].size, reverse=True)
+        else:
+            raise ValueError('Argument sort={} is not supported'.format(sort))
+
+        msd = MultiStateData.from_state_data((band, fd()[band]) for band in bands)
+        if not msd.arrays.y.size:
+            raise EmptyPhotometryError(self.name, bands)
+        return SNCurve(msd,
+                       name=self.name, has_spectra=self.has_spectra, claimed_type=self.claimed_type,
+                       is_binned=self.is_binned, is_filtered=True)
+
+    def convert_arrays(self, x, y, err):
+        return MultiStateData.from_arrays(x, y, err, self.norm, keys=self.keys())
+
+    @property
+    def X(self):
+        return self.arrays.x
+
+    @property
+    def y(self):
+        return self.arrays.y
+
+    @property
+    def err(self):
+        return self.arrays.err
+
+    @property
+    def norm(self):
+        return self.arrays.norm
+
+    def __repr__(self):
+        return 'SN {} with claimed type {}. Photometry data:\n{}'.format(
+            self.name, self.claimed_type, repr(self.odict)
+        )
+
+    def __iter__(self):
+        return iter(self.odict)
+
+    def __next__(self):
+        return next(self.odict)
+
+    def __len__(self):
+        return len(self.odict)
+
+    def __getitem__(self, item):
+        return self.odict[item]
+
+    def keys(self):
+        return super(SNCurve, self).keys()
+
+    def values(self):
+        return self.odict.values()
+
+    def items(self):
+        return self.odict.items()
+
+    def iterkeys(self):
+        return iterkeys(self.odict)
+
+    def itervalues(self):
+        return itervalues(self.odict)
+
+    def iteritems(self):
+        return iteritems(self.odict)
+
+
+class OSCCurve(SNCurve):
+    """SN photometric data from OSC JSON file
+
+    Parameters
+    ----------
+    json_data: dict
+        Dictionary with the data from Open Supernova Catalog json file,
+        this object should contain all fields under the top-level field with
+        SN name
+    bands: iterable of str or str or None, optional
+        Bands to use. It should be iterable of str, comma-separated str, or
+        None. The default is None, all available bands will be used
+
+    Attributes
+    ----------
+    name: string
+        SN name.
+    claimed_type: string or None
+        SN claimed type, None if no claimed type is specified
+    bands: frozenset of strings
+        Photometric bands that are appeared in `photometry`.
+    has_spectra: bool
+        Is there spectral data in original JSON
+    json: dict
+        Original JSON data
+
     Raises
     ------
     NoPhotometryError
@@ -232,29 +491,28 @@ class SNCurve(FrozenOrderedDict):
     EmptyPhotometryError
         No valid photometry dots for given `bands`
     BadPhotometryDataError
-        Raises if any used photometry dot contains bad data  
-    """.format(dtype=__photometry_dtype)
+        Raises if any used photometry dot contains bad data
+    """
 
-    def __init__(self, json_data, bands=None, bin_width=None):
+    def __init__(self, json_data, bands=None):
         d = dict()
 
         self._json = json_data
-        self._name = self._json['name']
+        name = self._json['name']
 
         if 'claimedtype' in self._json:
-            self._claimed_type = self._json['claimedtype'][0]['value']  # TODO: examine other values
+            claimed_type = self._json['claimedtype'][0]['value']  # TODO: examine other values
         else:
-            self._claimed_type = None
+            claimed_type = None
 
         if bands is not None:
             bands = _transform_to_tuple(bands)
             bands_set = set(bands)
 
-        self._has_spectra = 'spectra' in self._json
+        has_spectra = 'spectra' in self._json
 
-        self.ph = self.photometry = self
         if 'photometry' not in self._json:
-            raise NoPhotometryError(self.name)
+            raise NoPhotometryError(name)
         for dot in self._json['photometry']:
             if 'time' in dot and 'band' in dot:
                 if (bands is not None) and (dot.get('band') not in bands_set):
@@ -265,14 +523,14 @@ class SNCurve(FrozenOrderedDict):
                 if 'e_time' in dot:
                     e_time = float(dot['e_time'])
                     if e_time < 0 or not np.isfinite(e_time):
-                        raise BadPhotometryDotError(self.name, dot, 'e_time')
+                        raise BadPhotometryDotError(name, dot, 'e_time')
                 else:
                     e_time = np.nan
 
                 magn = float(dot['magnitude'])
                 flux = np.power(10, -0.4 * magn)
                 if not np.isfinite(flux):
-                    raise BadPhotometryDotError(self.name, dot)
+                    raise BadPhotometryDotError(name, dot)
 
                 if 'e_lower_magnitude' in dot and 'e_upper_magnitude' in dot:
                     e_lower_magn = float(dot['e_lower_magnitude'])
@@ -281,18 +539,18 @@ class SNCurve(FrozenOrderedDict):
                     flux_upper = np.power(10, -0.4 * (magn - e_upper_magn))
                     e_flux = 0.5 * (flux_upper - flux_lower)
                     if e_lower_magn < 0:
-                        raise BadPhotometryDotError(self.name, dot, 'e_lower_magnitude')
+                        raise BadPhotometryDotError(name, dot, 'e_lower_magnitude')
                     if e_upper_magn < 0:
-                        raise BadPhotometryDotError(self.name, dot, 'e_upper_magnitude')
+                        raise BadPhotometryDotError(name, dot, 'e_upper_magnitude')
                     if not np.isfinite(e_flux):
-                        raise BadPhotometryDotError(self.name, dot)
+                        raise BadPhotometryDotError(name, dot)
                 elif 'e_magnitude' in dot:
                     e_magn = float(dot['e_magnitude'])
                     e_flux = 0.4 * np.log(10) * flux * e_magn
                     if e_magn < 0:
-                        raise BadPhotometryDotError(self.name, dot, 'e_magnitude')
+                        raise BadPhotometryDotError(name, dot, 'e_magnitude')
                     if not np.isfinite(e_flux):
-                        raise BadPhotometryDotError(self.name, dot)
+                        raise BadPhotometryDotError(name, dot)
                     if e_magn == 0:
                         e_flux = np.nan
                 else:
@@ -306,68 +564,30 @@ class SNCurve(FrozenOrderedDict):
                     dot.get('upperlimit', False),
                 ))
         for k, v in iteritems(d):
-            v = d[k] = np.array(v, dtype=self.__photometry_dtype)
-            if np.any(np.diff(v['time']) < 0):
-                logging.info('Original SN {} data for band {} contains unordered dots'.format(self._name, k))
-                v[:] = v[np.argsort(v['time'])]
-            if bin_width is not None:
-                v = d[k] = self._binning(v, bin_width)
+            v = d[k] = np.rec.fromrecords(v, dtype=self._photometry_dtype)
+            if np.any(np.diff(v['x']) < 0):
+                logging.info('Original SN {} data for band {} contains unordered dots'.format(name, k))
+                v[:] = v[np.argsort(v['x'])]
             v.flags.writeable = False
 
         if sum(len(v) for v in iteritems(d)) == 0:
-            raise EmptyPhotometryError(self.name, bands)
+            raise EmptyPhotometryError(name, bands)
 
         if bands is None:
             bands = tuple(sorted(iterkeys(d)))
         else:
             for band in bands:
                 if band not in d:
-                    raise EmptyPhotometryError(self.name, (band,))
-        self.bands = bands
+                    raise EmptyPhotometryError(name, (band,))
 
-        super(SNCurve, self).__init__(((band, d[band]) for band in self.bands))
-
-    @staticmethod
-    def _binning(blc, bin_width):  # blc = band light curve
-        time = np.unique(blc['time'] // bin_width * bin_width)
-        time_idx = np.digitize(blc['time'], time) - 1
-        band_curve = np.empty(shape=time.shape, dtype=blc.dtype)
-        band_curve['time'] = time + 0.5 * bin_width
-        band_curve['e_time'] = 0.5 * bin_width
-        for i, t in enumerate(time):
-            sample = blc[time_idx == i]
-            if np.all(sample['isupperlimit']):
-                best = np.argmin(sample['flux'])
-                band_curve['flux'][i] = sample['flux'][best]
-                band_curve['e_flux'][i] = sample['e_flux'][best]
-                band_curve['isupperlimit'][i] = True
-            elif not np.any(np.isfinite(sample['e_flux'])):
-                sample = sample[~sample['isupperlimit']]
-                band_curve['flux'][i] = np.mean(sample['flux'])
-                band_curve['e_flux'][i] = np.nan
-                band_curve['isupperlimit'][i] = False
-            else:
-                sample = sample[np.logical_not(sample['isupperlimit']) & np.isfinite(sample['e_flux'])]
-                weight = 1 / sample['e_flux'] ** 2
-                sum_weight = np.sum(weight)
-                flux = np.sum(weight * sample['flux']) / sum_weight
-                if sample.size == 1:
-                    e_flux = sample['e_flux'][0]
-                else:
-                    sgm_mean = np.sqrt(np.sum(weight * (sample['flux'] - flux) ** 2) / sum_weight / (sample.size - 1))
-                    typical_e_flux = 1 / np.sqrt(sum_weight)
-                    if typical_e_flux > sgm_mean:
-                        e_flux = 0.5 * (sgm_mean + typical_e_flux)
-                    else:
-                        e_flux = sgm_mean
-                band_curve['flux'][i] = flux
-                band_curve['e_flux'][i] = e_flux
-                band_curve['isupperlimit'][i] = False
-        return band_curve
+        msd = MultiStateData.from_state_data((band, d[band]) for band in bands)
+        super(OSCCurve, self).__init__(msd,
+                                       name=name, has_spectra=has_spectra, claimed_type=claimed_type,
+                                       is_binned=False, is_filtered=False)
 
     @classmethod
     def from_json(cls, filename, snname=None, **kwargs):
-        """Load photometric data from json file loaded from sne.space.
+        """Load photometric data from the JSON file from Open Supernova Catalog
 
         Parameters
         ----------
@@ -408,107 +628,5 @@ class SNCurve(FrozenOrderedDict):
         return cls.from_json(sn_files.filepaths[0], **kwargs)
 
     @property
-    def name(self):
-        return self._name
-
-    @property
-    def claimed_type(self):
-        return self._claimed_type
-
-    @property
-    def has_spectra(self):
-        return self._has_spectra
-
-    def multi_state_data(self, with_upper_limits=False, with_inf_e_flux=False, bands=None, sort='default'):
-        """Filtered and sorted by bands MultiStateData object
-
-        Parameters
-        ----------
-        with_upper_limits: bool, optional
-            Include observation point marked as an upper limit
-        with_inf_e_flux: bool, optional
-            Include observation point with infinity/NaN error
-        bands: iterable or None, optional
-            Bands to return. Default is None, SNCurves.bands will be used
-        sort: str, optional
-            How `bands` will be sorted. Should be one of the following
-            strings:
-
-                - 'default' will keep the order of `bands`
-                - 'alphabetic' or 'alpha' will sort `bands` alphabetically
-                - 'total' will sort `bands` by the total number of photometric
-                  points, from maximum to minimum
-                - 'filtered' will sort `bands` by the number of returned
-                  photometric points from maximum to minimum, e.g. points
-                  filtered by `with_upper_limits` and `with_inf_e_flux`
-                  arguments
-
-        Returns
-        -------
-        MultiStateData
-
-        Raises
-        ------
-        EmptyPhotometryError
-        """
-        @lru_cache(maxsize=1)
-        def fd():
-            if with_upper_limits and with_inf_e_flux:  # Little optimization
-                return self
-            return {band: self[band][(np.logical_not(self[band]['isupperlimit']) + with_upper_limits)
-                                      & (np.isfinite(self[band]['e_flux']) + with_inf_e_flux)]
-                    for band in bands}
-
-        if bands is None:
-            bands = self.bands
-        else:
-            bands = _transform_to_tuple(bands)
-
-        if sort == 'default':
-            pass
-        elif sort == 'alphabetic' or sort == 'alpha':
-            bands = sorted(bands)
-        elif sort == 'total':
-            bands = sorted(bands, key=lambda band: self[band].size, reverse=True)
-        elif sort == 'filtered':
-            bands = sorted(bands, key=lambda band: fd()[band].size, reverse=True)
-        else:
-            raise ValueError('Argument sort={} is not supported'.format(sort))
-
-        def items_generator():
-            for band in bands:
-                yield (band, (fd()[band][name] for name in ('time', 'flux', 'e_flux')))
-        ph = items_generator()
-        msd = data_from_items(ph)
-        if not msd.arrays.y.size:
-            raise EmptyPhotometryError(self.name, bands)
-        return msd
-
-    @property
-    @lru_cache(maxsize=1)
-    def _Xy(self):
-        return self.multi_state_data(with_upper_limits=False,
-                                     with_inf_e_flux=False,
-                                     bands=None,
-                                     sort='filtered').arrays
-
-    @property
-    def X(self):
-        return self._Xy.x
-
-    @property
-    def y(self):
-        return self._Xy.y
-
-    @property
-    def y_err(self):
-        return self._Xy.y_err
-
-    @property
-    def y_norm(self):
-        return self._Xy.norm
-
-    def __repr__(self):
-        return 'SN {} with claimed type {}. Photometry data:\n{}'.format(
-            self.name, self.claimed_type, repr(self._d)
-        )
+    def json(self):
+        return deepcopy(self._json)

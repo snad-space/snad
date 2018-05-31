@@ -21,7 +21,7 @@ try:
 except ImportError:
     import mock
 
-from curves import SNCurve, SNFiles, NoPhotometryError, EmptyPhotometryError
+from curves import OSCCurve, SNFiles, NoPhotometryError, EmptyPhotometryError
 
 
 TRIANGLE_JSON_PATH = 'test_triangle.json'
@@ -84,7 +84,7 @@ SNS_ALL_TUPLE = tuple(sorted(SNS_ALL))
 
 
 def _get_curves(sns):
-    return [SNCurve.from_name(sn) for sn in sns]
+    return [OSCCurve.from_name(sn) for sn in sns]
 
 
 class BasicSNFilesTestCase(unittest.TestCase):
@@ -230,20 +230,16 @@ class ReadLightCurvesFromJsonTestCase(unittest.TestCase):
     def setUp(self):
         self.sn_files = SNFiles(SNS_ALL)
 
-    def read_file(self, fname):
-        curve = SNCurve.from_json(fname)
-        self.assertTrue(curve == curve.photometry)
-
     def test_download_and_read(self):
         for fname in self.sn_files.filepaths:
-            self.read_file(fname)
+            OSCCurve.from_json(fname)
 
 
 class BandDataTestCase(unittest.TestCase):
     def test_has_band(self):
         band = 'B'
         for sn in SNS_HAVE_B_BAND:
-            curve = SNCurve.from_name(sn, bands=band)
+            curve = OSCCurve.from_name(sn, bands=band)
             self.assertEqual(len(curve.bands), 1)
             self.assertIn(band, curve)
 
@@ -251,7 +247,7 @@ class BandDataTestCase(unittest.TestCase):
         band = 'HBRW'
         sn = SNS_ALL_TUPLE[0]
         with self.assertRaises(ValueError):
-            SNCurve.from_name(sn, bands=band)
+            OSCCurve.from_name(sn, bands=band)
 
 
 class UpperLimitTestCase(unittest.TestCase):
@@ -261,7 +257,7 @@ class UpperLimitTestCase(unittest.TestCase):
     def test_has_upper_limit(self):
         for curve in self.curves:
             has_upper_limit = reduce(operator.__or__,
-                                     (np.any(lc['isupperlimit']) for lc in curve.values()))
+                                     (np.any(lc['isupperlimit']) for lc in curve.odict.values()))
             self.assertTrue(has_upper_limit, 'SN {} light curves should have upper limit dots')
 
 
@@ -272,7 +268,7 @@ class EpsilonTimeTestCase(unittest.TestCase):
     def test_has_finite_e_time(self):
         for curve in self.curves:
             has_finite_e_time = reduce(operator.__or__,
-                                       (np.any(np.isfinite(lc['e_time'])) for lc in curve.values()))
+                                       (np.any(np.isfinite(lc['err_x'])) for lc in curve.odict.values()))
             self.assertTrue(has_finite_e_time,
                             'SN {} should have finite e_time dots')
 
@@ -283,28 +279,28 @@ class BadPhotometryTestCase(unittest.TestCase):
         for fpath in sn_files.filepaths:
             with self.assertRaises(NoPhotometryError,
                                    msg='{} should not contain photometry and KeyError should be raised'.format(fpath)):
-                SNCurve.from_json(fpath)
+                OSCCurve.from_json(fpath)
 
     def test_has_zero_valid_photometry_dots(self):
         sn_files = SNFiles(SNS_ZERO_VALID_PHOTOMETRY_DOTS)
         for fpath in sn_files.filepaths:
             with self.assertRaises(EmptyPhotometryError,
                                    msg='{} should not contain any valid photometry dot'.format(fpath)):
-                SNCurve.from_json(fpath)
+                OSCCurve.from_json(fpath)
 
     def test_has_not_observations_for_the_band(self):
         band = 'MDUzZDJ'
         for snname in SNS_ALL_TUPLE:
             with self.assertRaises(EmptyPhotometryError,
                                    msg='{} should not contain any observations in the band {}'.format(snname, band)):
-                SNCurve.from_name(snname, bands=band)
+                OSCCurve.from_name(snname, bands=band)
 
     def test_has_not_magn_errors(self):
         curves = _get_curves(SNS_HAVE_NOT_MAGN_ERRORS)
         for curve in curves:
             with self.assertRaises(EmptyPhotometryError,
                                    msg='{} should not contain finite errors'.format(curve.name)):
-                curve.multi_state_data(with_inf_e_flux=False)
+                curve.filtered(with_inf_e_flux=False)
 
 
 class HasSpectraTestCase(unittest.TestCase):
@@ -325,16 +321,15 @@ class TemporalOrderTestCase(unittest.TestCase):
 
     def test_order(self):
         for fpath in self.sn_files.filepaths:
-            curve = SNCurve.from_json(fpath)
+            curve = OSCCurve.from_json(fpath)
             for lc in curve.values():
-                self.assertTrue(np.all(np.diff(lc['time']) >= 0))
+                self.assertTrue(np.all(np.diff(lc['x']) >= 0))
 
     @unittest.skipIf(six.PY2, 'Logging testing is missed in Python 2')
     def test_unordered_logging(self):
         for fpath in self.sn_files.filepaths:
             with self.assertLogs(level=logging.INFO):
-                curve = SNCurve.from_json(fpath)
-            del curve
+                OSCCurve.from_json(fpath)
 
 
 class HasZeroEMagnitudeTestCase(unittest.TestCase):
@@ -344,7 +339,7 @@ class HasZeroEMagnitudeTestCase(unittest.TestCase):
     def test_has_infinite_errors(self):
         for curve in self.curves:
             for blc in itervalues(curve):
-                if np.any(~np.isfinite(blc['e_flux'])):
+                if np.any(~np.isfinite(blc['err'])):
                     break
             else:
                 assert False, '{} data should contain infinite errors'
@@ -352,7 +347,7 @@ class HasZeroEMagnitudeTestCase(unittest.TestCase):
     def test_have_only_positive_errors(self):
         for curve in self.curves:
             for band, blc in iteritems(curve):
-                e_flux = blc['e_flux']
+                e_flux = blc['err']
                 self.assertTrue(np.all(e_flux[np.isfinite(e_flux)] > 0),
                                 msg='{} in band {} has non-positive errors'.format(curve.name, band))
 
@@ -365,52 +360,61 @@ class LightCurveLearningDataTestCase(unittest.TestCase):
         self.u_magn = np.r_[5:-1:-3,-1:6.5:1.5]
 
     def test_X_U(self):
-        curve = SNCurve(self.json_data, bands='U')
+        curve = OSCCurve(self.json_data, bands='U')
         assert_equal(curve.X, np.stack((np.zeros_like(self.time), self.time), axis=1))
 
     def test_X_states(self):
-        curve = SNCurve(self.json_data)
+        curve = OSCCurve(self.json_data)
         assert_equal(curve.X[:len(self.time),0], np.zeros_like(self.time))
         assert_equal(curve.X[len(self.time):,0], np.ones_like(self.time))
 
     def test_y_U(self):
-        curve = SNCurve(self.json_data, bands='U')
-        assert_allclose(-2.5*np.log10(curve.y*curve.y_norm), self.u_magn)
+        curve = OSCCurve(self.json_data, bands='U')
+        assert_allclose(-2.5*np.log10(curve.y*curve.norm), self.u_magn)
 
 
 class LightCurveBinningTestCase(unittest.TestCase):
     def setUp(self):
+        self.band = 'X'
         self.time = np.arange(9, dtype=np.int)
         self.bin_width = 1
-        self.curve = SNCurve.from_json(BINNING_JSON_PATH)['X']
-        self.binned_curve = SNCurve.from_json(BINNING_JSON_PATH, bin_width=self.bin_width)['X']
+        osc_curve = OSCCurve.from_json(BINNING_JSON_PATH)
+        self.curve = osc_curve[self.band]
+        self.binned_curve = osc_curve.binned(bin_width=1, discrete_time=False)[self.band]
+        self.binned_curve_discrete = osc_curve.binned(bin_width=1, discrete_time=True)[self.band]
 
     def sample_and_binned(self, t):
-        sample_idx = (self.curve['time'] >= t) & (self.curve['time'] < t+1)
+        sample_idx = (self.curve['x'] >= t) & (self.curve['x'] < t+1)
         sample = self.curve[sample_idx]
         binned = self.binned_curve[t]
         return sample, binned
 
+    def test_all_discrete_time(self):
+        assert_allclose(self.time + 0.5 * self.bin_width, self.binned_curve_discrete['x'])
+        assert_allclose(0.5 * self.bin_width, self.binned_curve_discrete['err_x'])
+
     def test_all_upper_limits(self):
         t = self.time[0]
         sample, binned = self.sample_and_binned(t)
-        expected = sample[np.argmin(sample['flux'])].copy()
+        expected = sample[np.argmin(sample['y'])]
 
-        assert_allclose(t + 0.5 * self.bin_width, binned['time'])
-        assert_allclose(0.5 * self.bin_width, binned['e_time'])
-        self.assertEqual(expected['flux'], binned['flux'])
-        assert_allclose(expected['e_flux'], binned['e_flux'], rtol=0, atol=0, equal_nan=True)
+        assert_allclose(expected['x'], binned['x'])
+        assert_allclose(expected['err_x'], binned['err_x'])
+        self.assertEqual(expected['y'], binned['y'])
+        assert_allclose(expected['err'], binned['err'], rtol=0, atol=0, equal_nan=True)
         self.assertTrue(binned['isupperlimit'])
 
     def test_all_without_errors(self):
         t = self.time[1]
         sample, binned = self.sample_and_binned(t)
-        expected_flux = np.mean(sample['flux'])
+        expected_time = np.mean(sample['x'])
+        expected_e_time = np.std(sample['x']) / np.sqrt(sample.size - 1)
+        expected_flux = np.mean(sample['y'])
 
-        assert_allclose(t + 0.5 * self.bin_width, binned['time'])
-        assert_allclose(0.5 * self.bin_width, binned['e_time'])
-        assert_allclose(expected_flux, binned['flux'])
-        self.assertTrue(np.isnan(binned['e_flux']))
+        assert_allclose(expected_time, binned['x'])
+        assert_allclose(expected_e_time, binned['err_x'])
+        assert_allclose(expected_flux, binned['y'])
+        self.assertTrue(np.isnan(binned['err']))
         self.assertFalse(binned['isupperlimit'])
 
     def test_all_close_with_errors(self):
@@ -420,96 +424,102 @@ class LightCurveBinningTestCase(unittest.TestCase):
         # Check test data
         for i, dot1 in enumerate(sample[:-1]):
             for dot2 in sample[i+1:]:
-                d1, d2 = sorted([dot1, dot2], key=lambda d: d['e_flux'])
-                lower = d2['flux'] - d2['e_flux']
-                upper = d2['flux'] + d2['e_flux']
-                self.assertTrue(lower <= d1['flux'] - d1['e_flux'] <= upper
-                                or lower <= d1['flux'] + d1['e_flux'] <= upper)
-        assert_allclose(np.diff(sample['e_flux']), 0, atol=1e-2*np.min(sample['e_flux']))
+                d1, d2 = sorted([dot1, dot2], key=lambda d: d['err'])
+                lower = d2['y'] - d2['err']
+                upper = d2['y'] + d2['err']
+                self.assertTrue(lower <= d1['y'] - d1['err'] <= upper
+                                or lower <= d1['y'] + d1['err'] <= upper)
+        assert_allclose(np.diff(sample['err']), 0, atol=1e-2*np.min(sample['err']))
 
-        expected_flux = np.mean(sample['flux'])
-        expected_min_e_flux = 1 / np.sum(1 / sample['e_flux']**2)
+        expected_time = np.mean(sample['x'])
+        expected_e_time = np.std(sample['x']) / np.sqrt(sample.size - 1)
+        expected_flux = np.mean(sample['y'])
+        expected_min_err = 1 / np.sum(1 / sample['err']**2)
 
-        assert_allclose(t + 0.5 * self.bin_width, binned['time'])
-        assert_allclose(0.5 * self.bin_width, binned['e_time'])
-        assert_allclose(expected_flux, binned['flux'])
-        assert_allclose(1.0000000000000002, binned['flux'])
-        self.assertLessEqual(expected_min_e_flux, binned['e_flux'])
-        assert_allclose(0.0866025403784, binned['e_flux'])
+        assert_allclose(expected_time, binned['x'])
+        assert_allclose(expected_e_time, binned['err_x'])
+        assert_allclose(expected_flux, binned['y'])
+        assert_allclose(1.0000000000000002, binned['y'])
+        self.assertLessEqual(expected_min_err, binned['err'])
+        assert_allclose(0.0866025403784, binned['err'])
         self.assertFalse(binned['isupperlimit'])
         for dot1 in sample:
-            d1, d2 = sorted([dot1, binned], key=lambda d: d['e_flux'])
-            lower = d2['flux'] - d2['e_flux']
-            upper = d2['flux'] + d2['e_flux']
-            self.assertTrue(lower <= d1['flux'] - d1['e_flux'] <= upper
-                            or lower <= d1['flux'] + d1['e_flux'] <= upper)
+            d1, d2 = sorted([dot1, binned], key=lambda d: d['err'])
+            lower = d2['y'] - d2['err']
+            upper = d2['y'] + d2['err']
+            self.assertTrue(lower <= d1['y'] - d1['err'] <= upper
+                            or lower <= d1['y'] + d1['err'] <= upper)
 
     def test_close_with_errors_and_one_bad(self):
         t = self.time[3]
         sample, binned = self.sample_and_binned(t)
-        close_dots = sample[sample['flux'] < 3]  # flux of the bad should be 10
+        close_dots = sample[sample['y'] < 3]  # flux of the bad should be 10
         self.assertEqual(close_dots.size + 1, sample.size)
-        bad = sample[sample['flux'] > 3][0]
+        bad = sample[sample['y'] > 3][0]
         # Check test data
         for i, dot1 in enumerate(sample[:-1]):
             for dot2 in sample[i+1:]:
-                d1, d2 = sorted([dot1, dot2], key=lambda d: d['e_flux'])
-                lower = d2['flux'] - d2['e_flux']
-                upper = d2['flux'] + d2['e_flux']
-                self.assertTrue(lower <= d1['flux'] - d1['e_flux'] <= upper
-                                or lower <= d1['flux'] + d1['e_flux'] <= upper)
+                d1, d2 = sorted([dot1, dot2], key=lambda d: d['err'])
+                lower = d2['y'] - d2['err']
+                upper = d2['y'] + d2['err']
+                self.assertTrue(lower <= d1['y'] - d1['err'] <= upper
+                                or lower <= d1['y'] + d1['err'] <= upper)
 
-        expected_min_flux = np.mean(close_dots['flux'])
-        expected_max_flux = bad['flux']
-        expected_min_e_flux1 = 1 / np.sum(1 / close_dots['e_flux']**2)
-        expected_min_e_flux2 = np.sqrt(np.sum((sample['flux'] - np.mean(sample['flux']))**2) / (sample.size - 1))
-        expected_min_e_flux = min(expected_min_e_flux1, expected_min_e_flux2)
+        expected_time = np.average(sample['x'], weights=1/sample['err']**2)
+        expected_min_e_time = np.std(sample['x']) / np.sqrt(sample.size - 1)
+        expected_min_flux = np.mean(close_dots['y'])
+        expected_max_flux = bad['y']
+        expected_min_err1 = 1 / np.sum(1 / close_dots['err']**2)
+        expected_min_err2 = np.sqrt(np.sum((sample['y'] - np.mean(sample['y']))**2) / (sample.size - 1))
+        expected_min_err = min(expected_min_err1, expected_min_err2)
 
-        assert_allclose(t + 0.5 * self.bin_width, binned['time'])
-        assert_allclose(0.5 * self.bin_width, binned['e_time'])
-        self.assertLessEqual(expected_min_flux, binned['flux'])
-        assert_allclose(1.0013294434801876, binned['flux'])
-        self.assertGreaterEqual(expected_max_flux, binned['flux'])
-        assert_allclose(0.0971313820607, binned['e_flux'])
-        self.assertLessEqual(expected_min_e_flux, binned['e_flux'])
+        assert_allclose(expected_time, binned['x'])
+        self.assertLess(expected_min_e_time, binned['err_x'])
+        self.assertLessEqual(expected_min_flux, binned['y'])
+        assert_allclose(1.0013294434801876, binned['y'])
+        self.assertGreaterEqual(expected_max_flux, binned['y'])
+        assert_allclose(0.0971313820607, binned['err'])
+        self.assertLessEqual(expected_min_err, binned['err'])
         self.assertFalse(binned['isupperlimit'])
         for dot1 in close_dots:
-            d1, d2 = sorted([dot1, binned], key=lambda d: d['e_flux'])
-            lower = d2['flux'] - d2['e_flux']
-            upper = d2['flux'] + d2['e_flux']
-            self.assertTrue(lower <= d1['flux'] - d1['e_flux'] <= upper
-                            or lower <= d1['flux'] + d1['e_flux'] <= upper)
+            d1, d2 = sorted([dot1, binned], key=lambda d: d['err'])
+            lower = d2['y'] - d2['err']
+            upper = d2['y'] + d2['err']
+            self.assertTrue(lower <= d1['y'] - d1['err'] <= upper
+                            or lower <= d1['y'] + d1['err'] <= upper)
 
     def test_two_groups_with_equal_errors(self):
         t = self.time[4]
         sample, binned = self.sample_and_binned(t)
         # Flux of lower group is ~ 1, fkux of upper group is ~ 10
-        lower_group = sample[sample['flux'] < 3]
-        upper_group = sample[sample['flux'] > 3]
+        lower_group = sample[sample['y'] < 3]
+        upper_group = sample[sample['y'] > 3]
         # Check test data
         for group in (lower_group, upper_group):
             for i, dot1 in enumerate(group[:-1]):
                 for dot2 in group[i+1:]:
-                    d1, d2 = sorted([dot1, dot2], key=lambda d: d['e_flux'])
-                    lower = d2['flux'] - d2['e_flux']
-                    upper = d2['flux'] + d2['e_flux']
-                    self.assertTrue(lower <= d1['flux'] - d1['e_flux'] <= upper
-                                    or lower <= d1['flux'] + d1['e_flux'] <= upper)
-        assert_allclose(np.diff(sample['e_flux']), 0, atol=1e-2 * np.min(sample['e_flux']))
+                    d1, d2 = sorted([dot1, dot2], key=lambda d: d['err'])
+                    lower = d2['y'] - d2['err']
+                    upper = d2['y'] + d2['err']
+                    self.assertTrue(lower <= d1['y'] - d1['err'] <= upper
+                                    or lower <= d1['y'] + d1['err'] <= upper)
+        assert_allclose(np.diff(sample['err']), 0, atol=1e-2 * np.min(sample['err']))
 
-        expected_flux = np.mean(sample['flux'])
-        expected_min_flux = np.mean(lower_group['flux'])
-        expected_max_flux = np.mean(upper_group['flux'])
-        expected_e_flux = np.sqrt(np.sum((sample['flux']-np.mean(sample['flux']))**2) / sample.size / (sample.size-1))
+        expected_time = np.mean(sample['x'])
+        expected_e_time = np.std(sample['x']) / np.sqrt(sample.size - 1)
+        expected_flux = np.mean(sample['y'])
+        expected_min_flux = np.mean(lower_group['y'])
+        expected_max_flux = np.mean(upper_group['y'])
+        expected_err = np.sqrt(np.sum((sample['y']-np.mean(sample['y']))**2) / sample.size / (sample.size-1))
 
-        assert_allclose(t + 0.5 * self.bin_width, binned['time'])
-        assert_allclose(0.5 * self.bin_width, binned['e_time'])
-        assert_allclose(expected_flux, binned['flux'])
-        assert_allclose(5.500000000000001, binned['flux'])
-        self.assertLess(expected_min_flux, binned['flux'])
-        self.assertGreater(expected_max_flux, binned['flux'])
-        assert_allclose(expected_e_flux, binned['e_flux'])
-        assert_allclose(2.01279242182, binned['e_flux'])
+        assert_allclose(expected_time, binned['x'])
+        assert_allclose(expected_e_time, binned['err_x'])
+        assert_allclose(expected_flux, binned['y'])
+        assert_allclose(5.500000000000001, binned['y'])
+        self.assertLess(expected_min_flux, binned['y'])
+        self.assertGreater(expected_max_flux, binned['y'])
+        assert_allclose(expected_err, binned['err'])
+        assert_allclose(2.01279242182, binned['err'])
         self.assertFalse(binned['isupperlimit'])
 
     def test_upper_limit_and_without_error(self):
@@ -521,12 +531,12 @@ class LightCurveBinningTestCase(unittest.TestCase):
         upper_limit = upper_limit[0]
         dot = sample[~sample['isupperlimit']][0]
         # Check test data
-        self.assertLess(upper_limit['flux'], dot['flux'])
+        self.assertLess(upper_limit['y'], dot['y'])
 
-        assert_allclose(t + 0.5 * self.bin_width, binned['time'])
-        assert_allclose(0.5 * self.bin_width, binned['e_time'])
-        self.assertEqual(dot['flux'], binned['flux'])
-        self.assertTrue(np.isnan(binned['e_flux']))
+        self.assertEqual(dot['x'], binned['x'])
+        assert_allclose(dot['err_x'], binned['err_x'], equal_nan=True)
+        self.assertEqual(dot['y'], binned['y'])
+        self.assertTrue(np.isnan(binned['err']))
         self.assertFalse(binned['isupperlimit'])
 
     def test_upper_limit_and_with_error(self):
@@ -537,10 +547,10 @@ class LightCurveBinningTestCase(unittest.TestCase):
         self.assertEqual(upper_limit.size, 1)
         dot = sample[~sample['isupperlimit']][0]
 
-        assert_allclose(t + 0.5 * self.bin_width, binned['time'])
-        assert_allclose(0.5 * self.bin_width, binned['e_time'])
-        self.assertEqual(dot['flux'], binned['flux'])
-        self.assertEqual(dot['e_flux'], binned['e_flux'])
+        self.assertTrue(dot['x'], binned['x'])
+        assert_allclose(dot['err_x'], binned['err_x'], equal_nan=True)
+        self.assertEqual(dot['y'], binned['y'])
+        self.assertEqual(dot['err'], binned['err'])
         self.assertFalse(binned['isupperlimit'])
 
     def test_without_error_and_with_error(self):
@@ -548,17 +558,17 @@ class LightCurveBinningTestCase(unittest.TestCase):
 
         sample, binned = self.sample_and_binned(t)
         self.assertEqual(sample.size, 2)
-        without_error = sample[~np.isfinite(sample['e_flux'])]
+        without_error = sample[~np.isfinite(sample['err'])]
         self.assertEqual(without_error.size, 1)
         without_error = without_error[0]
-        dot = sample[np.isfinite(sample['e_flux'])]
+        dot = sample[np.isfinite(sample['err'])]
         self.assertEqual(dot.size, 1)
         dot = dot[0]
 
-        assert_allclose(t + 0.5 * self.bin_width, binned['time'])
-        assert_allclose(0.5 * self.bin_width, binned['e_time'])
-        self.assertEqual(dot['flux'], binned['flux'])
-        self.assertEqual(dot['e_flux'], binned['e_flux'])
+        self.assertTrue(dot['x'], binned['x'])
+        assert_allclose(dot['err_x'], binned['err_x'], equal_nan=True)
+        self.assertEqual(dot['y'], binned['y'])
+        self.assertEqual(dot['err'], binned['err'])
         self.assertFalse(binned['isupperlimit'])
 
     def test_upper_limit_without_error_with_error(self):
@@ -566,11 +576,11 @@ class LightCurveBinningTestCase(unittest.TestCase):
         sample, binned = self.sample_and_binned(t)
         self.assertEqual(sample.size, 3)
         self.assertEqual(np.sum(sample['isupperlimit']), 1)
-        self.assertEqual(np.sum(~sample['isupperlimit'] & ~np.isfinite(sample['e_flux'])), 1)
-        dot = sample[~sample['isupperlimit'] & np.isfinite(sample['e_flux'])][0]
+        self.assertEqual(np.sum(~sample['isupperlimit'] & ~np.isfinite(sample['err'])), 1)
+        dot = sample[~sample['isupperlimit'] & np.isfinite(sample['err'])][0]
 
-        assert_allclose(t + 0.5 * self.bin_width, binned['time'])
-        assert_allclose(0.5 * self.bin_width, binned['e_time'])
-        self.assertEqual(dot['flux'], binned['flux'])
-        self.assertEqual(dot['e_flux'], binned['e_flux'])
+        self.assertTrue(dot['x'], binned['x'])
+        assert_allclose(dot['err_x'], binned['err_x'], equal_nan=True)
+        self.assertEqual(dot['y'], binned['y'])
+        self.assertEqual(dot['err'], binned['err'])
         self.assertFalse(binned['isupperlimit'])
