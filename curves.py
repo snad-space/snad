@@ -4,10 +4,11 @@ import os
 import sys
 from collections import Iterable
 from copy import deepcopy
+from pprint import pformat
 
 import numpy as np
 import requests
-from multistate_kernel.util import MultiStateData
+from multistate_kernel.util import MultiStateData, FrozenOrderedDict
 from six import binary_type
 from six import iteritems, iterkeys, itervalues
 from six.moves import urllib
@@ -226,10 +227,6 @@ class SNCurve(MultiStateData):
         `numpy.recarray` with dtype `{}`
     name: str
         SN name
-    has_spectra: bool
-        Is initial data have any spectrum
-    claimed_type: str or None
-        Claimed SN type or None
     is_binned: bool
         Is initial data were binned
     is_filtered: bool
@@ -239,23 +236,20 @@ class SNCurve(MultiStateData):
     ----------
     name: string
         SN name.
-    claimed_type: string or None
-        SN claimed type, None if no claimed type is specified
     bands: frozenset of strings
         Photometric bands that are appeared in `photometry`.
-    has_spectra: bool
-        Is there spectral data in original json
     """.format(_photometry_dtype)
 
     def __init__(self, multi_state_data, name,
-                 has_spectra=False, claimed_type=None,
-                 is_binned=False, is_filtered=False):
+                 is_binned=False, is_filtered=False,
+                 additional_attrs=FrozenOrderedDict()):
+        for name, value in iteritems(additional_attrs):
+            self.__setattr__(name, value)
         super(SNCurve, self).__init__(multi_state_data.odict, multi_state_data.arrays)
         self.name = name
-        self.has_spectra = has_spectra
-        self.claimed_type = claimed_type
         self.is_binned = is_binned
         self.is_filtered = is_filtered
+        self.__additional_attrs = additional_attrs
         self.bands = self._keys_tuple
 
     def binned(self, bin_width, discrete_time=False, bands=None):
@@ -296,9 +290,9 @@ class SNCurve(MultiStateData):
             raise EmptyPhotometryError(self.name, set(bands) - set(self.bands))
         msd = MultiStateData.from_state_data((band, self._binning(self[band], bin_width, discrete_time))
                                              for band in bands)
-        return SNCurve(msd,
-                       name=self.name, has_spectra=self.has_spectra, claimed_type=self.claimed_type,
-                       is_binned=True, is_filtered=self.is_filtered)
+        return SNCurve(msd, name=self.name,
+                       is_binned=True, is_filtered=self.is_filtered,
+                       additional_attrs=self.__additional_attrs)
 
     @staticmethod
     def _binning(blc, bin_width, discrete_time):  # blc = band light curve
@@ -400,7 +394,7 @@ class SNCurve(MultiStateData):
         if not msd.arrays.y.size:
             raise EmptyPhotometryError(self.name, bands)
         return SNCurve(msd,
-                       name=self.name, has_spectra=self.has_spectra, claimed_type=self.claimed_type,
+                       name=self.name,
                        is_binned=self.is_binned, is_filtered=True)
 
     def convert_arrays(self, x, y, err):
@@ -423,8 +417,8 @@ class SNCurve(MultiStateData):
         return self.arrays.norm
 
     def __repr__(self):
-        return 'SN {} with claimed type {}. Photometry data:\n{}'.format(
-            self.name, self.claimed_type, repr(self.odict)
+        return 'SN {}, photometry data:\n{}'.format(
+            self.name, pformat(self.odict)
         )
 
     def __iter__(self):
@@ -493,6 +487,10 @@ class OSCCurve(SNCurve):
     BadPhotometryDataError
         Raises if any used photometry dot contains bad data
     """
+    __additional_value_fields = {
+        str: ['alias', 'claimedtype', 'ra', 'dec', 'maxdate', 'maxband', 'host', 'hostra', 'hostdec'],
+        float: ['redshift']
+    }
 
     def __init__(self, json_data, bands=None):
         d = dict()
@@ -500,16 +498,15 @@ class OSCCurve(SNCurve):
         self._json = json_data
         name = self._json['name']
 
-        if 'claimedtype' in self._json:
-            claimed_type = self._json['claimedtype'][0]['value']  # TODO: examine other values
-        else:
-            claimed_type = None
-
         if bands is not None:
             bands = _transform_to_tuple(bands)
             bands_set = set(bands)
 
-        has_spectra = 'spectra' in self._json
+        add_attrs = {}
+        for func, fields in iteritems(self.__additional_value_fields):
+            for field in fields:
+                add_attrs[field] = tuple(func(x['value']) for x in self._json.get(field, []))
+        add_attrs['has_spectra'] = 'spectra' in self._json
 
         if 'photometry' not in self._json:
             raise NoPhotometryError(name)
@@ -581,9 +578,9 @@ class OSCCurve(SNCurve):
                     raise EmptyPhotometryError(name, (band,))
 
         msd = MultiStateData.from_state_data((band, d[band]) for band in bands)
-        super(OSCCurve, self).__init__(msd,
-                                       name=name, has_spectra=has_spectra, claimed_type=claimed_type,
-                                       is_binned=False, is_filtered=False)
+        super(OSCCurve, self).__init__(msd, name=name,
+                                       is_binned=False, is_filtered=False,
+                                       additional_attrs=add_attrs)
 
     @classmethod
     def from_json(cls, filename, snname=None, **kwargs):
