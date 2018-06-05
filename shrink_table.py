@@ -57,9 +57,9 @@ if __name__ == '__main__':
     new_file = 'gri_pr_shrinked_{}_{}.csv'.format(t1, t2)
     shrink_file(old_file, new_file, t1, t2)
 
-    rng_ = np.arange(1, 152, 3)
-    table = pandas.read_csv(old_file)
-    count = [count_against_range(table, rng) for rng in rng_]
-    plt.plot(rng_, count, 'x')
-    plt.show()
+#    rng_ = np.arange(1, 152, 3)
+#    table = pandas.read_csv(old_file)
+#    count = [count_against_range(table, rng) for rng in rng_]
+#    plt.plot(rng_, count, 'x')
+#    plt.show()
 
