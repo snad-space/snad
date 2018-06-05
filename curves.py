@@ -403,6 +403,16 @@ class SNCurve(MultiStateData):
     def convert_arrays(self, x, y, err):
         return MultiStateData.from_arrays(x, y, err, self.norm, keys=self.keys())
 
+    def append_dict(self, d):
+        self.is_binned = False
+        self.is_filtered = False
+        return super(SNCurve, self).append_dict(d)
+
+    def append(self, other):
+        self.is_binned = False
+        self.is_filtered = False
+        return super(SNCurve, self).append(other)
+
     @property
     def bands(self):
         return tuple(self.keys())
