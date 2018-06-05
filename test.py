@@ -7,6 +7,7 @@ import operator
 import requests
 import shutil
 import unittest
+from collections import namedtuple
 from functools import reduce
 from tempfile import mkdtemp, NamedTemporaryFile
 
@@ -82,8 +83,8 @@ SNS_ALL = frozenset.union(SNS_NO_CMAIMED_TYPE, SNS_UPPER_LIMIT, SNS_E_LOWER_UPPE
 SNS_ALL_TUPLE = tuple(sorted(SNS_ALL))
 
 
-def _get_curves(sns):
-    return [OSCCurve.from_name(sn) for sn in sns]
+def _get_curves(sns, *args, **kwargs):
+    return [OSCCurve.from_name(sn, *args, **kwargs) for sn in sns]
 
 
 class BasicSNFilesTestCase(unittest.TestCase):
@@ -234,6 +235,36 @@ class ReadLightCurvesFromJsonTestCase(unittest.TestCase):
         for fname in self.sn_files.filepaths:
             OSCCurve.from_json(fname)
 
+
+class AddPhotometryDotTestCase(unittest.TestCase):
+    def setUp(self):
+        self.band = 'B'
+        self.curves = _get_curves(SNS_HAVE_B_BAND, bands=self.band)
+
+    def test_add_dot_to_msd(self):
+        x = np.array([-100])
+        y = np.array([123])
+        err = np.array([1.23])
+        dot = np.rec.array([x, y, err], names=('x', 'y', 'err'))
+        dots = {'B': dot}
+        for curve in self.curves:
+            msd = curve.multi_state_data()
+            msd.append_dict(dots)
+            self.assertIn(x, msd.odict[self.band].x)
+            self.assertIn(y, msd.odict[self.band].y)
+            self.assertIn(err, msd.odict[self.band].err)
+            self.assertIn(x, msd.arrays.x[:,1])
+
+    def test_msd_with_zero_dots(self):
+        for curve in self.curves:
+            x = np.array([0, 1])
+            msd = curve.msd_with_zero_valued_dots(x)
+            self.assertIn(x[0], msd.odict[self.band].x)
+            self.assertIn(x[1], msd.odict[self.band].x)
+            self.assertIn(0, msd.odict[self.band].y)
+            self.assertIn(0, msd.odict[self.band].err)
+            self.assertIn(x[0], msd.arrays.x[:, 1])
+            self.assertIn(x[1], msd.arrays.x[:, 1])
 
 class BandDataTestCase(unittest.TestCase):
     def test_has_band(self):
