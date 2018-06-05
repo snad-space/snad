@@ -47,7 +47,7 @@ class GPInterpolator(object):
             self.optimizer = 'fmin_l_bfgs_b'  # the default for scikit-learn 0.19
         else:
             self.optimizer = self.optimizer(optimize_method)
-        self.regressor = GaussianProcessRegressor(self.kernel, alpha=curve.arrays.err**2,
+        self.regressor = GaussianProcessRegressor(self.kernel, alpha=curve.arrays.err**2 + curve.arrays.y**2*(add_err/100)**2,
                                                   optimizer=self.optimizer,
                                                   n_restarts_optimizer=self.n_restarts_optimizer,
                                                   normalize_y=False, random_state=self.random_state)
@@ -158,11 +158,11 @@ if __name__ == '__main__':
 
     colors = {"g'": 'g', "r'": 'r', "i'": 'brown'}
 
-    curve = OSCCurve.from_name(sn_name, bands=bands).binned(bin_width=1).filtered(sort='filtered')
+    curve = OSCCurve.from_name(sn_name, bands=bands).binned(bin_width=1, discrete_time=True).filtered(sort='filtered')
     x_ = np.linspace(curve.X[:,1].min(), curve.X[:,1].max(), 101)
     interpolator = GPInterpolator(
         curve, (k1, k2, k3), m, m_bounds,
-        optimize_method='trust-constr',
+        optimize_method=None,  #'trust-constr',
         n_restarts_optimizer=0,
         random_state=0
     )
