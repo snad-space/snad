@@ -254,7 +254,6 @@ class SNCurve(MultiStateData):
         self.is_binned = is_binned
         self.is_filtered = is_filtered
         self.__additional_attrs = additional_attrs
-        self.bands = tuple(self.keys())
 
     def binned(self, bin_width, discrete_time=False, bands=None):
         """Binned photometry data
@@ -403,6 +402,10 @@ class SNCurve(MultiStateData):
 
     def convert_arrays(self, x, y, err):
         return MultiStateData.from_arrays(x, y, err, self.norm, keys=self.keys())
+
+    @property
+    def bands(self):
+        return tuple(self.keys())
 
     @property
     def X(self):
