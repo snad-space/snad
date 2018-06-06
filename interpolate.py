@@ -38,7 +38,7 @@ class GPInterpolator(object):
     def __init__(self, curve,
                  kernels, constant_matrix, constant_matrix_bounds,
                  optimize_method=None, n_restarts_optimizer=0,
-                 random_state=None):
+                 random_state=None, add_err=0):
         self.curve = curve
         self.n_restarts_optimizer = n_restarts_optimizer
         self.random_state = random_state
