@@ -431,7 +431,6 @@ class SNCurve(MultiStateData):
         msd = MultiStateData.from_state_data(d)
         return self.convert_dict(msd)
 
-
     def multi_state_data(self):
         """Copy photometry data as MultiStateData"""
         return MultiStateData.from_state_data(self.odict)
@@ -453,6 +452,38 @@ class SNCurve(MultiStateData):
         dots = {band: np.rec.array([x, y, err], names=('x', 'y', 'err')) for band in self.bands}
         msd.append_dict(dots)
         return msd
+
+    def error_set(self, abs=0, rel=0):
+        """Return new SNCurve with set errors for dots without them
+
+        The equation for the error is `err = atol + rtol * y`.
+        Upper limits will not be changed
+
+        Parameters
+        ----------
+        abs: float or dict-like[str: float], optional
+            Can be dictionary where keys are bands
+        rel: float, optional
+
+        Returns
+        -------
+        SNCurve
+        """
+        d = dict(SNCurve.odict)
+        for band, lc in d.items():
+            lc = d[band] = lc.copy()
+            was_writeable = lc.flags.writeable
+            lc.flags.writeable = True
+            inf_err_items = lc[(~(lc['isupperlimit'])) & (np.isfinite(lc['err']))]
+            if isinstance(abs, float):
+                abs_err = abs
+            else:
+                abs_err = abs[band]
+            inf_err_items.err = abs_err + rel * inf_err_items.y
+            lc.flags.writeable = was_writeable
+        msd = MultiStateData.from_state_data(d)
+        return SNCurve(msd, self.name, is_binned=self.is_binned, is_filtered=False,
+                       additional_attrs=self.__additional_attrs)
 
     @property
     def bands(self):
