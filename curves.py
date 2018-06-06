@@ -403,15 +403,27 @@ class SNCurve(MultiStateData):
     def convert_arrays(self, x, y, err):
         return MultiStateData.from_arrays(x, y, err, self.norm, keys=self.keys())
 
-    def append_dict(self, d):
-        self.is_binned = False
-        self.is_filtered = False
-        return super(SNCurve, self).append_dict(d)
+    def multi_state_data(self):
+        """Copy x, y and err as MultiStateData"""
+        return MultiStateData.from_state_data(self.odict)
 
-    def append(self, other):
-        self.is_binned = False
-        self.is_filtered = False
-        return super(SNCurve, self).append(other)
+    def msd_with_zero_valued_dots(self, x):
+        """Data with dots with given x and zero y and err for all bands
+
+        Parameters
+        ----------
+        x: array-like, shape=(n, )
+
+        Returns
+        -------
+        MultiStateData
+        """
+        msd = self.multi_state_data()
+        y = np.zeros_like(x)
+        err = np.zeros_like(x)
+        dots = {band: np.rec.array([x, y, err], names=('x', 'y', 'err')) for band in self.bands}
+        msd.append_dict(dots)
+        return msd
 
     @property
     def bands(self):
