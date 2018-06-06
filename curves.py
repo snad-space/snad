@@ -453,7 +453,7 @@ class SNCurve(MultiStateData):
         msd.append_dict(dots)
         return msd
 
-    def error_set(self, abs=0, rel=0):
+    def set_error(self, abs=0, rel=0):
         """Return new SNCurve with set errors for dots without them
 
         The equation for the error is `err = atol + rtol * y`.
@@ -469,7 +469,7 @@ class SNCurve(MultiStateData):
         -------
         SNCurve
         """
-        d = dict(SNCurve.odict)
+        d = dict(self.odict)
         for band, lc in d.items():
             lc = d[band] = lc.copy()
             was_writeable = lc.flags.writeable
