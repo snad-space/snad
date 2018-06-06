@@ -403,8 +403,37 @@ class SNCurve(MultiStateData):
     def convert_arrays(self, x, y, err):
         return MultiStateData.from_arrays(x, y, err, self.norm, keys=self.keys())
 
+    def convert_msd(self, msd):
+        """Convert MultiStateData object to SNCurve with the same attributes
+
+        Parameters
+        ----------
+        msd: MultiStateData
+
+        Returns
+        -------
+        SNCurve
+        """
+        return SNCurve(msd, self.name, is_binned=False, is_filtered=False, additional_attrs=self.__additional_attrs)
+
+    def convert_dict(self, d):
+        """Convert dict to SNCurve with the same attributes
+
+        Parameters
+        ----------
+        d: dict-like
+            It should has the same format as `.odict`
+
+        Returns
+        -------
+        SNCurve
+        """
+        msd = MultiStateData.from_state_data(d)
+        return self.convert_dict(msd)
+
+
     def multi_state_data(self):
-        """Copy x, y and err as MultiStateData"""
+        """Copy photometry data as MultiStateData"""
         return MultiStateData.from_state_data(self.odict)
 
     def msd_with_zero_valued_dots(self, x):
