@@ -4,6 +4,11 @@ import numpy as np
 import pandas as pd
 from sklearn.manifold import TSNE
 
+def do_metric(X1, X2):
+	mask = np.invert((X1 == 0.0) | (X2 == 0.0))
+	z = X1[mask] - X2[mask]
+	return np.inner(z,z)
+
 df_gri = pd.read_csv('gri_pr.csv')
 df_theta = pd.read_csv('theta_pr.csv')
 
@@ -17,7 +22,7 @@ data = data / norm
 n_features = 9
 method = 'exact'
 
-t = TSNE(n_components=n_features, method=method)
+t = TSNE(n_components=n_features, method=method, metric=do_metric)
 new_data = t.fit_transform(data)
 
 sn_name = df[['SN']]
