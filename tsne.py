@@ -1,0 +1,26 @@
+#!/usr/bin/env python
+
+import numpy as np
+import pandas as pd
+from sklearn.manifold import TSNE
+
+df_gri = pd.read_csv('gri_pr.csv')
+df_theta = pd.read_csv('theta_pr.csv')
+
+df = pd.concat([df_gri.reset_index(drop=True),df_theta.iloc[:,2:]], axis=1)
+
+data = df.loc[:,'g-050':]
+norm = np.amax(data, axis=0)
+
+data = data / norm
+
+n_features = 9
+method = 'exact'
+
+t = TSNE(n_components=n_features, method=method)
+new_data = t.fit_transform(data)
+
+sn_name = df[['SN']]
+
+new_df = pd.concat([sn_name.reset_index(drop=True), pd.DataFrame(new_data)], axis=1)
+new_df.to_csv("tsne_pr.csv")
