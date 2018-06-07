@@ -13,7 +13,7 @@ if output is None:
 df_lc = pd.read_csv(inp)
 lc_data = np.array(df_lc.loc[:,'g-050':])
 lc_data_norm = np.amax(lc_data, axis=1).reshape(-1,1)
-lc_data_normed = np.hstack([lc_data / lc_data_norm, lc_data_norm])
+lc_data_normed = np.hstack([lc_data / lc_data_norm, -2.5*np.log10(lc_data_norm)])
 meta_data = df_lc.iloc[:,0:9]
 new_df = pd.concat([meta_data.reset_index(drop=True), pd.DataFrame(lc_data_normed)], axis=1)
 new_df.columns = list(df_lc.columns) + ["LC_norm",]
