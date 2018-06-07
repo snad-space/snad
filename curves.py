@@ -430,7 +430,7 @@ class SNCurve(MultiStateData):
         SNCurve
         """
         msd = MultiStateData.from_state_data(d)
-        return self.convert_dict(msd)
+        return self.convert_msd(msd)
 
     def multi_state_data(self):
         """Copy photometry data as MultiStateData"""

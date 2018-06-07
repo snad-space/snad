@@ -38,7 +38,7 @@ class GPInterpolator(object):
     def __init__(self, curve,
                  kernels, constant_matrix, constant_matrix_bounds,
                  optimize_method=None, n_restarts_optimizer=0,
-                 random_state=None, add_err=0):
+                 random_state=None, add_err=0, raise_on_bounds=True):
         self.curve = curve
         self.n_restarts_optimizer = n_restarts_optimizer
         self.random_state = random_state
@@ -50,13 +50,14 @@ class GPInterpolator(object):
         self.regressor = GaussianProcessRegressor(self.kernel, alpha=curve.arrays.err**2 + curve.arrays.y**2*(add_err/100)**2,
                                                   optimizer=self.optimizer,
                                                   n_restarts_optimizer=self.n_restarts_optimizer,
-                                                  normalize_y=False, random_state=self.random_state)
+                                                  normalize_y=True, random_state=self.random_state)
         self.regressor.fit(curve.arrays.x, curve.arrays.y)
-        if self.is_near_bounds(self.regressor.kernel_):
-            raise FitFailedError(
-                '''Fit was not succeed, some of the values are near bounds. Resulted kernel is
-                {}'''.format(pformat(self.regressor.kernel_.get_params()))
-            )
+        if raise_on_bounds:
+            if self.is_near_bounds(self.regressor.kernel_):
+                raise FitFailedError(
+                    '''Fit was not succeed, some of the values are near bounds. Resulted kernel is
+                    {}'''.format(pformat(self.regressor.kernel_.get_params()))
+                )
 
     def __call__(self, x, compute_err=True):
         """Produce median and std of GP realizations
@@ -70,13 +71,13 @@ class GPInterpolator(object):
         -------
         MultiStateData
         """
-        x = curve.sample(x)
+        x = self.curve.sample(x)
         if compute_err:
             y, err = self.regressor.predict(x, return_std=True)
         else:
             y = self.regressor.predict(x)
             err = np.full_like(y, np.nan)
-        return curve.convert_arrays(x, y, err)
+        return self.curve.convert_arrays(x, y, err)
 
     def y_samples(self, x, samples=1, random_state=None):
         """Generate GP realizations
@@ -96,7 +97,7 @@ class GPInterpolator(object):
         if random_state is None:
             random_state = self.random_state
         y_samples = self.regressor.sample_y(x, n_samples=samples, random_state=random_state)
-        return tuple(curve.convert_arrays(x, y_, np.full_like(y_, np.nan)) for y_ in y_samples)
+        return tuple(self.curve.convert_arrays(x, y_, np.full_like(y_, np.nan)) for y_ in y_samples)
 
     @staticmethod
     def optimizer(method='trust-constr'):
@@ -117,7 +118,7 @@ class GPInterpolator(object):
     def is_near_bounds(kernel, rtol=1e-4):
         params = kernel.get_params()
         bounds_sufix = '_bounds'
-        bounds = (k for k in params if k.endswith(bounds_sufix) and params[k] != 'fixed')
+        bounds = (k for k in params if k.endswith(bounds_sufix) if str(params[k]) != 'fixed')
         for b in bounds:
             param = b[:-len(bounds_sufix)]
             value = params[param]
@@ -139,7 +140,7 @@ if __name__ == '__main__':
     from curves import OSCCurve
     from sklearn.gaussian_process import kernels
 
-    sn_name = 'SDSS-II SN 1609'
+    sn_name = 'SDSS-II SN 10450'
     bands = "g',r',i'".split(',')
 
     k1 = kernels.RBF(length_scale_bounds=(1e-4, 1e4))
@@ -148,7 +149,9 @@ if __name__ == '__main__':
     # k3 = kernels.ConstantKernel(constant_value_bounds='fixed')
     k3 = kernels.WhiteKernel()
 
-    m = np.zeros((3,3)); m[0, 0] = 1
+    m = np.array([[1, 0, 0],
+                  [0.5, 1, 0],
+                  [0.5, 0.5, 1]])
     m_bounds = (np.array([[1e-4, 0, 0],
                           [-1e2, -1e3, 0],
                           [-1e2, -1e2, -1e3]]),
