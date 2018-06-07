@@ -30,7 +30,7 @@ def band_transformation(msd, a, b, new_bands, old_bands=None, fill_value=np.nan)
     flux = OrderedDict((band, np.recarray(shape=(n, ), dtype=[('x', float), ('y', float), ('err', float)]))
                        for band in new_bands)
     for i, x in enumerate(msd.odict[old_bands[0]].x):
-        old_flux = np.array([msd.odict[band][i].y for band in old_bands])
+        old_flux = np.array([msd.odict[band][i]['y'] for band in old_bands])
         if np.any(old_flux <= 0):
             new_flux = np.full_like(b, fill_value)
         else:
