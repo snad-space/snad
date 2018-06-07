@@ -6,10 +6,10 @@ import warnings
 import matplotlib.pyplot as plt
 
 
-class NansInFluxErrorsError(ValueError):
+class InfiniteFluxErrorsError(ValueError):
     def __init__(self, curve, band):
         self.message = 'Found unexpected NaN values in light curve errors band {} of {}'.format(band, curve.name)
-        super(NansInFluxErrorsError, self).__init__(self.message)
+        super(InfiniteFluxErrorsError, self).__init__(self.message)
 
 
 class NearlyEmptyFluxError(ValueError):
@@ -27,6 +27,11 @@ class BazinFitter:
         MultiStateData to fit
     name: str
         The identification name of data. Used for warnings and errors.
+
+    Raises
+    ------
+    InfiniteFluxErrorsError
+    NearlyEmptyFluxError
     """
 
     def __init__(self, msd, name='unnamed'):
@@ -37,8 +42,8 @@ class BazinFitter:
 
         # Check for errors
         for b in self.bands:
-            if np.any(np.isnan(self.curve[b].err)):
-                raise NansInFluxErrorsError(self.curve, b)
+            if not np.all(np.isfinite(self.curve[b].err)):
+                raise InfiniteFluxErrorsError(self.curve, b)
 
             if len(self.curve[b]) < 2:
                 raise NearlyEmptyFluxError(self.curve, b)
