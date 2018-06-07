@@ -38,7 +38,7 @@ class GPInterpolator(object):
     def __init__(self, curve,
                  kernels, constant_matrix, constant_matrix_bounds,
                  optimize_method=None, n_restarts_optimizer=0,
-                 random_state=None, add_err=0):
+                 random_state=None, add_err=0, raise_on_bounds=True):
         self.curve = curve
         self.n_restarts_optimizer = n_restarts_optimizer
         self.random_state = random_state
@@ -52,11 +52,12 @@ class GPInterpolator(object):
                                                   n_restarts_optimizer=self.n_restarts_optimizer,
                                                   normalize_y=True, random_state=self.random_state)
         self.regressor.fit(curve.arrays.x, curve.arrays.y)
-        if self.is_near_bounds(self.regressor.kernel_):
-            raise FitFailedError(
-                '''Fit was not succeed, some of the values are near bounds. Resulted kernel is
-                {}'''.format(pformat(self.regressor.kernel_.get_params()))
-            )
+        if raise_on_bounds:
+            if self.is_near_bounds(self.regressor.kernel_):
+                raise FitFailedError(
+                    '''Fit was not succeed, some of the values are near bounds. Resulted kernel is
+                    {}'''.format(pformat(self.regressor.kernel_.get_params()))
+                )
 
     def __call__(self, x, compute_err=True):
         """Produce median and std of GP realizations
