@@ -30,7 +30,8 @@ def band_transformation(msd, a, b, new_bands, old_bands=None, fill_value=np.nan)
     flux = OrderedDict((band, np.recarray(shape=(n, ), dtype=[('x', float), ('y', float), ('err', float)]))
                        for band in new_bands)
     for i, x in enumerate(msd.odict[old_bands[0]].x):
-        old_flux = np.array([msd.odict[band][i]['y'] for band in old_bands])
+#        print msd.odict[old_bands[0]].y
+        old_flux = np.array([msd.odict[band].y[i] for band in old_bands])
         if np.any(old_flux <= 0):
             new_flux = np.full_like(b, fill_value)
         else:
@@ -57,9 +58,9 @@ def VR_to_gri(msd, **kwargs):
 
 def BR_to_gri(msd, **kwargs):
     """Convert BR light curves to gri with Lupton(2005) equation"""
-    a = np.array([[1.2644, 0.2091],
-                  [0.1962,  0.8773],
-                  [-0.4721, 1.2952]])
+    a = np.array([[0.7909, 0.2091],
+                  [0.1227,  0.8773],
+                  [-0.2952, 1.2952]])
     b = np.array([-0.1593, 0.0573, 0.3522])
     new_bands = ('g', 'r', 'i')
     old_bands = ('B', 'R')
