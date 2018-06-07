@@ -4,6 +4,7 @@ import os
 import sys
 from collections import Iterable
 from copy import deepcopy
+from numbers import Real
 from pprint import pformat
 
 import numpy as np
@@ -453,15 +454,15 @@ class SNCurve(MultiStateData):
         msd.append_dict(dots)
         return msd
 
-    def set_error(self, val=0, rel=0):
+    def set_error(self, absolute=0, rel=0):
         """Return new SNCurve with set errors for dots without them
 
-        The equation for the error is `err = val + rel * y`.
-        Upper limits will not be changed
+        The equation for the error is `err = absolute + rel * y`.
+        Upper limits will not be changed.
 
         Parameters
         ----------
-        val: float or dict-like[str: float], optional
+        absolute: float or dict-like[str: float], optional
             Can be dictionary where keys are bands
         rel: float, optional
 
@@ -474,12 +475,12 @@ class SNCurve(MultiStateData):
             lc = d[band] = lc.copy()
             was_writeable = lc.flags.writeable
             lc.flags.writeable = True
-            inf_err_items = lc[(~(lc['isupperlimit'])) & (np.isfinite(lc['err']))]
-            if isinstance(val, float):
-                val_band = val
+            inf_err_idx = (~(lc['isupperlimit'])) & (~np.isfinite(lc['err']))
+            if isinstance(absolute, Real):
+                abs_band = absolute
             else:
-                val_band = val[band]
-            inf_err_items.err = val_band + rel * inf_err_items.y
+                abs_band = absolute[band]
+            lc.err[inf_err_idx] = abs_band + rel * lc[inf_err_idx].y
             lc.flags.writeable = was_writeable
         msd = MultiStateData.from_state_data(d)
         return SNCurve(msd, self.name, is_binned=self.is_binned, is_filtered=False,
