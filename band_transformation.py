@@ -27,7 +27,8 @@ def band_transformation(msd, a, b, new_bands, old_bands=None, fill_value=np.nan)
     if old_bands is None:
         old_bands = tuple(msd.keys())
     n = len(msd.arrays.y) // len(msd.keys())
-    flux = OrderedDict((band, np.recarray(shape=(n, ), dtype=msd.odict[old_bands[0]].dtype)) for band in new_bands)
+    flux = OrderedDict((band, np.recarray(shape=(n, ), dtype=[('x', float), ('y', float), ('err', float)]))
+                       for band in new_bands)
     for i, x in enumerate(msd.odict[old_bands[0]].x):
         old_flux = np.array([msd.odict[band][i].y for band in old_bands])
         if np.any(old_flux <= 0):
