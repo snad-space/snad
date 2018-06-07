@@ -7,7 +7,6 @@ import operator
 import requests
 import shutil
 import unittest
-from collections import namedtuple
 from functools import reduce
 from tempfile import mkdtemp, NamedTemporaryFile
 
@@ -265,6 +264,45 @@ class AddPhotometryDotTestCase(unittest.TestCase):
             self.assertIn(0, msd.odict[self.band].err)
             self.assertIn(x[0], msd.arrays.x[:, 1])
             self.assertIn(x[1], msd.arrays.x[:, 1])
+
+
+class SetErrorsTestCase(unittest.TestCase):
+    def setUp(self):
+        self.curves = _get_curves(SNS_HAVE_NOT_MAGN_ERRORS)
+
+    def test_set_abs_error(self):
+        absolute = 1
+        for curve in self.curves:
+            # Check test data:
+            assert_allclose(curve.arrays.err, np.nan, atol=0, rtol=0, equal_nan=True)
+
+            curve_with_errors = curve.set_error(absolute=absolute)
+            for lc in curve_with_errors.odict.values():
+                assert_equal(lc.err, 1)
+            assert_equal(curve_with_errors.arrays.err * curve_with_errors.norm, absolute)
+
+            # Check test data is not broken:
+            for lc in curve.odict.values():
+                assert_allclose(lc.err, np.nan, atol=0, rtol=0, equal_nan=True)
+            assert_allclose(curve.arrays.err, np.nan, atol=0, rtol=0, equal_nan=True)
+
+    def test_set_rel_error(self):
+        rel = 1
+        for curve in self.curves:
+            # Check test data:
+            assert_allclose(curve.arrays.err, np.nan, atol=0, rtol=0, equal_nan=True)
+
+            curve_with_errors = curve.set_error(rel=rel)
+            for lc in curve_with_errors.odict.values():
+                assert_equal(lc.y, lc.err)
+            assert_equal(curve_with_errors.arrays.y * curve_with_errors.norm,
+                         curve_with_errors.arrays.err * curve_with_errors.norm)
+
+            # Check test data is not broken:
+            for lc in curve.odict.values():
+                assert_allclose(lc.err, np.nan, atol=0, rtol=0, equal_nan=True)
+            assert_allclose(curve.arrays.err, np.nan, atol=0, rtol=0, equal_nan=True)
+
 
 class BandDataTestCase(unittest.TestCase):
     def test_has_band(self):
