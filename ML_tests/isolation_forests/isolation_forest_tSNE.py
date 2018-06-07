@@ -4,6 +4,8 @@ import os
 import seaborn
 
 from sklearn.ensemble import IsolationForest
+from collections import Counter
+from itertools import groupby
 
 ########################################################
 ###        Analysis with tSNE parameters            ####
@@ -16,6 +18,7 @@ rng = np.random.RandomState(42)
 # False, True or 'summary', if 'summary' - generate plots only for the objs common in both analysis: full fit + LC parameters
 plot = True
 
+names = []
 indx_all = []
 skip = []
 
@@ -56,7 +59,7 @@ for k in range(2, 10):
 
     print('Fit isolation forest model ...') 
 
-    clf = IsolationForest(max_samples=2000, random_state=rng, n_estimators=1000, contamination=0.01)
+    clf = IsolationForest(max_samples=2000, random_state=rng, n_estimators=1000, contamination=0.02)
     clf.fit(data)
     pred = clf.predict(data) 
 
@@ -98,25 +101,29 @@ for k in range(2, 10):
         plt.savefig('anomalies/tSNE_' + str(k) + '_iso.png')
         plt.close('all')
 
-    if k == 2:
-        indx_all = indx_iso
-    else:
-        for item in indx_all:
-            if item not in indx_iso:
-                indx_all.remove(item)
+    indx_all += indx_iso
 
-print('\n There are ', str(len(indx_all)), ' common anomalies.')
-print([names[item] for item in indx_all])
+indx_counter = Counter(indx_all)
+indx_groups = groupby(indx_counter.most_common(), lambda x: x[1])
+
+for (c,it) in indx_groups:
+    itl = list(it)
+    print('Anomalies common for {} cases ({} total):'.format(c, len(itl)))
+    for x in itl:
+        print('    {}'.format(names[x[0]]))
+
+#print('\n There are ', str(len(indx_all)), ' common anomalies.')
+#print([names[item] for item in indx_all])
 
 # save names of SNe considered anomalies in all configurations
-output_file3 = 'weirdSN_isoforest_tSNE_all.dat'
+#output_file3 = 'weirdSN_isoforest_tSNE_all.dat'
 
-op5 = open(output_file3, 'w')
-for i in range(len(indx_all)):
-    op5.write(names[indx_all[i]] + '\n')
-op5.close()
+#op5 = open(output_file3, 'w')
+#for i in range(len(indx_all)):
+#    op5.write(names[indx_all[i]] + '\n')
+#op5.close()
 
-print('\n Names of anomalies common to all tSNE analysis stored at ', output_file3)
+#print('\n Names of anomalies common to all tSNE analysis stored at ', output_file3)
 
 
 ### plot
