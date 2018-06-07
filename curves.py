@@ -2,8 +2,9 @@ import json
 import logging
 import os
 import sys
-from collections import Iterable
+from collections import Iterable, OrderedDict
 from copy import deepcopy
+from functools import reduce
 from numbers import Real
 from pprint import pformat
 
@@ -397,40 +398,44 @@ class SNCurve(MultiStateData):
         msd = MultiStateData.from_state_data((band, fd()[band]) for band in bands)
         if not msd.arrays.y.size:
             raise EmptyPhotometryError(self.name, bands)
-        return SNCurve(msd,
-                       name=self.name,
-                       is_binned=self.is_binned, is_filtered=True)
+        return SNCurve(msd, name=self.name, is_binned=self.is_binned, is_filtered=True,
+                       additional_attrs=self.__additional_attrs)
 
     def convert_arrays(self, x, y, err):
         return MultiStateData.from_arrays(x, y, err, self.norm, keys=self.keys())
 
-    def convert_msd(self, msd):
+    def convert_msd(self, msd, is_binned=False, is_filtered=False):
         """Convert MultiStateData object to SNCurve with the same attributes
 
         Parameters
         ----------
         msd: MultiStateData
+        is_binned: bool, optional
+        is_filtered: bool, optional
 
         Returns
         -------
         SNCurve
         """
-        return SNCurve(msd, self.name, is_binned=False, is_filtered=False, additional_attrs=self.__additional_attrs)
+        return SNCurve(msd, self.name, is_binned=is_binned, is_filtered=is_filtered,
+                       additional_attrs=self.__additional_attrs)
 
-    def convert_dict(self, d):
+    def convert_dict(self, d, is_binned=False, is_filtered=False):
         """Convert dict to SNCurve with the same attributes
 
         Parameters
         ----------
         d: dict-like
             It should has the same format as `.odict`
+        is_binned: bool, optional
+        is_filtered: bool, optional
 
         Returns
         -------
         SNCurve
         """
         msd = MultiStateData.from_state_data(d)
-        return self.convert_msd(msd)
+        return self.convert_msd(msd, is_binned, is_filtered)
 
     def multi_state_data(self):
         """Copy photometry data as MultiStateData"""
@@ -485,6 +490,64 @@ class SNCurve(MultiStateData):
         msd = MultiStateData.from_state_data(d)
         return SNCurve(msd, self.name, is_binned=self.is_binned, is_filtered=False,
                        additional_attrs=self.__additional_attrs)
+
+    def transform_upper_limit_to_normal(self, intervals=((-np.inf, None), (None, np.inf)),
+                                        inf_err_is_norm=False, return_upper_limit=False):
+        """New SNCurve object with upper limits converted to normal points
+
+        Parameters
+        ----------
+        intervals: tuple[tuple(float or None, float or None)], optional
+            A tuple of time intervals where upper limits to get. `None` on the
+            first position indicates the latest normal (not upper limit)
+            observation, and `None` on the last position indicates the earliest
+            normal observation. The default is too take upper limits out of
+            the range of normal observation data
+        inf_err_is_norm: bool, optional
+            Should be dot without error described as normal, when `None` is
+            used in `intervals`
+        return_upper_limit: bool, optional
+            Return dictionary of used upper limits
+
+        Returns
+        -------
+        SNCurve
+        SNCurve, dict
+        """
+        upper_limits = OrderedDict()
+        new_dict = OrderedDict()
+        for band, lc in iteritems(self.odict):
+            if inf_err_is_norm:
+                lc_normal = lc[~lc.isupperlimit]
+            else:
+                lc_normal = lc[(~lc.isupperlimit) & np.isfinite(lc.err)]
+            if len(lc_normal) == 0:
+                t_min = np.inf
+                t_max = -np.inf
+            else:
+                t_min = np.min(lc_normal.x)
+                t_max = np.max(lc_normal.x)
+
+            def is_between(a, interval):
+                interval = list(interval)
+                if interval[0] is None:
+                    interval[0] = t_max
+                if interval[1] is None:
+                    interval[1] = t_min
+                return (interval[0] < a) & (a < interval[1])
+
+            lc = lc.copy()
+            ul_idx = (reduce(lambda prev, interval: prev | is_between(lc.x, interval), intervals, False)
+                      & lc.isupperlimit)
+            lc.err[ul_idx] = lc[ul_idx].y
+            lc.y[ul_idx] = 0.5 * lc[ul_idx].err
+            lc.isupperlimit[ul_idx] = False
+            upper_limits[band] = lc[ul_idx]
+            new_dict[band] = lc
+        sn_curve = self.convert_dict(new_dict, is_binned=self.is_binned, is_filtered=self.is_filtered)
+        if not return_upper_limit:
+            return sn_curve
+        return sn_curve, upper_limits
 
     @property
     def bands(self):
