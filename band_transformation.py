@@ -44,7 +44,7 @@ def band_transformation(msd, a, b, new_bands, old_bands=None, fill_value=np.nan)
 
 
 def VR_to_gri(msd, **kwargs):
-    """Convert VR light curves to gri"""
+    """Convert VR light curves to gri with Lupton(2005) equation"""
     a = np.array([[1.9557, -0.9557],
                   [0.6965,  0.3035],
                   [1.7302, -0.7302]])
@@ -55,7 +55,7 @@ def VR_to_gri(msd, **kwargs):
 
 
 def BR_to_gri(msd, **kwargs):
-    """Convert BR light curves to gri"""
+    """Convert BR light curves to gri with Lupton(2005) equation"""
     a = np.array([[1.2644, 0.2091],
                   [0.1962,  0.8773],
                   [-0.4721, 1.2952]])
