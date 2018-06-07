@@ -3,7 +3,6 @@ import numpy as np
 import scipy.optimize
 from collections import OrderedDict
 import warnings
-import matplotlib.pyplot as plt
 
 
 class InfiniteFluxErrorsError(ValueError):
@@ -155,6 +154,8 @@ class BazinFitter:
 
 
 def _plot_bazin(filename, bazin):
+    import matplotlib.pyplot as plt
+
     curve = bazin.curve
 
     all_band_x = np.hstack([curve[band].x for band in curve.keys()])
