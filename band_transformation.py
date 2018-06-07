@@ -53,6 +53,14 @@ def VR_to_gri(msd, **kwargs):
     old_bands = ('V', 'R')
     return band_transformation(msd, a, b, new_bands, old_bands=old_bands, **kwargs)
 
+def BR_to_gri(msd, **kwargs):
+    a = np.array([[1.2644, 0.2091],
+                  [0.1962,  0.8773],
+                  [-0.4721, 1.2952]])
+    b = np.array([-0.1593, 0.0573, 0.3522])
+    new_bands = ('g', 'r', 'i')
+    old_bands = ('B', 'R')
+    return band_transformation(msd, a, b, new_bands, old_bands=old_bands, **kwargs)
 
 if __name__ == '__main__':
     x = np.array([0.])

@@ -20,15 +20,26 @@ def do_metric(X1, X2):
 	z = X1[mask] - X2[mask]
 	return np.inner(z,z)
 
-df_gri = pd.read_csv('gri_pr.csv')
-df_theta = pd.read_csv('theta_pr.csv')
+inp_files = [
+	('gri_pr.csv', 'theta_pr.csv'),
+	('gri.csv', 'theta.csv'),
+]
 
-df = pd.concat([df_gri.reset_index(drop=True),df_theta.iloc[:,2:]], axis=1)
+dfs = [(pd.read_csv(lc), pd.read_csv(theta)) for lc, theta in inp_files]
 
-data = df.loc[:,'g-050':]
-norm = np.amax(data, axis=0)
+df_lc, df_theta = zip(*dfs)
+df_lc_join = pd.concat(df_lc, axis=0)
+df_theta_join = pd.concat(df_theta, axis=0)
 
-data = data / norm
+lc_data = np.array(df_lc_join.loc[:,'g-050':])
+lc_data_norm = np.amax(lc_data, axis=1).reshape(-1,1)
+lc_data_normed = np.hstack([lc_data / lc_data_norm, lc_data_norm])
+
+theta_data = np.array(df_theta_join.iloc[:,2:])
+
+data = np.hstack([lc_data_normed, theta_data])
+data_norm = np.amax(data, axis=0)
+data = data / data_norm
 
 n_features = dim
 method = 'exact'
@@ -36,7 +47,7 @@ method = 'exact'
 t = TSNE(n_components=n_features, method=method, metric=do_metric)
 new_data = t.fit_transform(data)
 
-sn_name = df[['SN']]
+sn_name = df_lc_join[['SN']]
 
 new_df = pd.concat([sn_name.reset_index(drop=True), pd.DataFrame(new_data)], axis=1)
 new_df.to_csv(output)
