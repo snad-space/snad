@@ -17,4 +17,4 @@ lc_data_normed = np.hstack([lc_data / lc_data_norm, lc_data_norm])
 meta_data = df_lc.iloc[:,0:9]
 new_df = pd.concat([meta_data.reset_index(drop=True), pd.DataFrame(lc_data_normed)], axis=1)
 new_df.columns = list(df_lc.columns) + ["LC_norm",]
-new_df.to_csv(output)
+new_df.to_csv(output, index=False)
