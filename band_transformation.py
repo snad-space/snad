@@ -5,9 +5,27 @@ from multistate_kernel.util import MultiStateData
 
 
 def band_transformation(msd, a, b, new_bands, old_bands=None, fill_value=np.nan):
+    """Transforms light curves from one band set to another
+
+    Parameters
+    ----------
+    msd: MultiStateData
+        Initial light curves
+    a: 2-D numpy.array, shape=(len(new_bands), len(old_bands)))
+    b: 1-D numpy.array, shape=(len(new_bands), )
+    new_bands: iterable of str
+        A collection of new band names
+    old_bands: iterable of str or None, optional
+        A collection of old band names. If None, `msd.keys()` will be used
+    fill_value: float, optional
+        The value to fill output data when input flux is negative
+
+    Returns
+    -------
+    MultiStateData
+    """
     if old_bands is None:
         old_bands = tuple(msd.keys())
-    assert a.shape == (len(new_bands), len(old_bands))
     n = len(msd.arrays.y) // len(msd.keys())
     flux = OrderedDict((band, np.recarray(shape=(n, ), dtype=msd.odict[old_bands[0]].dtype)) for band in new_bands)
     for i, x in enumerate(msd.odict[old_bands[0]].x):
@@ -26,12 +44,24 @@ def band_transformation(msd, a, b, new_bands, old_bands=None, fill_value=np.nan)
 
 
 def VR_to_gri(msd, **kwargs):
+    """Convert VR light curves to gri"""
     a = np.array([[1.9557, -0.9557],
                   [0.6965,  0.3035],
                   [1.7302, -0.7302]])
     b = np.array([-0.0853, 0.0688, 0.3246])
     new_bands = ('g', 'r', 'i')
     old_bands = ('V', 'R')
+    return band_transformation(msd, a, b, new_bands, old_bands=old_bands, **kwargs)
+
+
+def BR_to_gri(msd, **kwargs):
+    """Convert BR light curves to gri"""
+    a = np.array([[1.2644, 0.2091],
+                  [0.1962,  0.8773],
+                  [-0.4721, 1.2952]])
+    b = np.array([-0.1593, 0.0573, 0.3522])
+    new_bands = ('g', 'r', 'i')
+    old_bands = ('B', 'R')
     return band_transformation(msd, a, b, new_bands, old_bands=old_bands, **kwargs)
 
 
