@@ -29,6 +29,8 @@ def band_transformation(msd, a, b, new_bands, old_bands=None, fill_value=np.nan)
     n = len(msd.arrays.y) // len(msd.keys())
     flux = OrderedDict((band, np.recarray(shape=(n, ), dtype=[('x', float), ('y', float), ('err', float)]))
                        for band in new_bands)
+    
+    
     for i, x in enumerate(msd.odict[old_bands[0]].x):
 #        print msd.odict[old_bands[0]].y
         old_flux = np.array([msd.odict[band].y[i] for band in old_bands])
@@ -36,8 +38,18 @@ def band_transformation(msd, a, b, new_bands, old_bands=None, fill_value=np.nan)
             new_flux = np.full_like(b, fill_value)
         else:
             old_magn = -2.5 * np.log10(old_flux)
-            new_magn = np.dot(a, old_magn) + b
+            
+            if len(old_bands) > len(new_bands):
+                vector_old_magn = old_magn - b 
+    #            print 
+                lstsq = np.linalg.lstsq(a, vector_old_magn)
+                new_magn = lstsq[0]
+    #            print lstsq
+    #            print new_magn
+            else:
+                new_magn = np.dot(a, old_magn) + b
             new_flux = 10**(-0.4 * new_magn)
+
         for i_band, band in enumerate(new_bands):
             flux[band][i].x = x
             flux[band][i].y = new_flux[i_band]
@@ -51,7 +63,8 @@ def VR_to_gri(msd, **kwargs):
                   [0.6965,  0.3035],
                   [1.7302, -0.7302]])
     b = np.array([-0.0853, 0.0688, 0.3246])
-    new_bands = ('g', 'r', 'i')
+#    new_bands = ('g', 'r', 'i')
+    new_bands = ("g'", "r'", "i'")
     old_bands = ('V', 'R')
     return band_transformation(msd, a, b, new_bands, old_bands=old_bands, **kwargs)
 
@@ -63,17 +76,32 @@ def BR_to_gri(msd, **kwargs):
                   [-0.2952, 1.2952]])
     b = np.array([-0.1593, 0.0573, 0.3522])
     new_bands = ('g', 'r', 'i')
+#    new_bands = ("g'", "r'", "i'")
     old_bands = ('B', 'R')
     return band_transformation(msd, a, b, new_bands, old_bands=old_bands, **kwargs)
+
+def BRI_to_gri(msd, **kwargs):
+    """Convert BRI light curves to gri with Lupton(2005) equation"""
+    a = np.array([[1.3130,-0.3130,0.],
+                  [-0.1837,1.1837,0.],
+                  [0.,0.7064,0.2936],
+                  [0.,-0.2444,1.2444]])
+    b = np.array([0.2271,-0.0971,-0.1439,-0.3820])
+    new_bands = ('g', 'r', 'i')
+#    new_bands = ("g'", "r'", "i'")
+    old_bands = ('B', 'R', 'R','I')
+    return band_transformation(msd, a, b, new_bands, old_bands=old_bands, **kwargs)    
 
 
 if __name__ == '__main__':
     x = np.array([0.])
     err = np.array([0.])
-    magnV = 1
-    magnR = 2
-    items = (('V', np.rec.array((x, np.array([10**(-0.4*magnV)]), err), dtype=[('x', float), ('y', float), ('err', float)])),
-             ('R', np.rec.array((x, np.array([10**(-0.4*magnR)]), err), dtype=[('x', float), ('y', float), ('err', float)])),)
+    magnB = 20
+    magnR = 20
+    magnI = 20
+    items = (('B', np.rec.array((x, np.array([10**(-0.4*magnB)]), err), dtype=[('x', float), ('y', float), ('err', float)])),
+             ('R', np.rec.array((x, np.array([10**(-0.4*magnR)]), err), dtype=[('x', float), ('y', float), ('err', float)])),
+             ('I', np.rec.array((x, np.array([10**(-0.4*magnI)]), err), dtype=[('x', float), ('y', float), ('err', float)])))
     msd = MultiStateData.from_state_data(items)
-    new_msd = VR_to_gri(msd)
+    new_msd = BRI_to_gri(msd)
     print(-2.5 * np.log10((new_msd.arrays.y * new_msd.norm)))
