@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-
 from pprint import pformat
 
 import numpy as np
@@ -33,6 +31,12 @@ class GPInterpolator(object):
         is None, the default value of `optimizer` argument of
         `sklearn.gaussian_process.GaussianProcessRegressor` will be used
     n_restarts_optimizer: int, optional
+    with_bazin: bool, optional
+        Use BazinFilter to fit data before Gaussian process
+    add_err: float, optional
+        Additional error for all the data, percent of flux
+    raise_on_bounds: bool, optional
+        Raise or not if fitted parameters are near bounds
     random_state: int or RandomState or None, optional
 
     Raises
@@ -44,11 +48,9 @@ class GPInterpolator(object):
                  normalize_y=True,
                  optimize_method=None, n_restarts_optimizer=0,
                  with_bazin=False,
+                 with_gp=True,
                  random_state=None, add_err=0, raise_on_bounds=True):
         self.curve = curve
-        self.n_restarts_optimizer = n_restarts_optimizer
-        self.random_state = random_state
-        self.kernel = MultiStateKernel(kernels, constant_matrix, constant_matrix_bounds)
         self.with_bazin = with_bazin
         if optimize_method is None:
             self.optimizer = 'fmin_l_bfgs_b'  # the default for scikit-learn 0.19
@@ -63,18 +65,23 @@ class GPInterpolator(object):
         else:
             self.msd = self.curve
 
-        self.regressor = GaussianProcessRegressor(self.kernel,
-                                                  alpha=self.msd.arrays.err**2 + self.msd.arrays.y**2*(add_err/100)**2,
-                                                  optimizer=self.optimizer,
-                                                  n_restarts_optimizer=self.n_restarts_optimizer,
-                                                  normalize_y=normalize_y, random_state=self.random_state)
-        self.regressor.fit(self.msd.arrays.x, self.msd.arrays.y)
-        if raise_on_bounds:
-            if self.is_near_bounds(self.regressor.kernel_):
-                raise FitFailedError(
-                    '''Fit was not succeed, some of the values are near bounds. Resulted kernel is
-                    {}'''.format(pformat(self.regressor.kernel_.get_params()))
-                )
+        if with_gp:
+            self.n_restarts_optimizer = n_restarts_optimizer
+            self.random_state = random_state
+            self.kernel = MultiStateKernel(kernels, constant_matrix, constant_matrix_bounds)
+            alpha = self.msd.arrays.err**2 + self.msd.arrays.y**2*(add_err/100)**2
+            self.regressor = GaussianProcessRegressor(self.kernel,
+                                                      alpha=alpha,
+                                                      optimizer=self.optimizer,
+                                                      n_restarts_optimizer=self.n_restarts_optimizer,
+                                                      normalize_y=normalize_y, random_state=self.random_state)
+            self.regressor.fit(self.msd.arrays.x, self.msd.arrays.y)
+            if raise_on_bounds:
+                if self.is_near_bounds(self.regressor.kernel_):
+                    raise FitFailedError(
+                        '''Fit was not succeed, some of the values are near bounds. Resulted kernel is
+                        {}'''.format(pformat(self.regressor.kernel_.get_params()))
+                    )
 
     def __call__(self, x, compute_err=True):
         """Produce median and std of GP realizations
@@ -159,72 +166,3 @@ class GPInterpolator(object):
             if np.any(np.abs(value - lower_upper) < atol):
                 return True
         return False
-
-
-if __name__ == '__main__':
-    import matplotlib.pyplot as plt
-    import os
-    from curves import OSCCurve
-    from sklearn.gaussian_process import kernels
-    import pandas
-
-    fig_dir = 'fig'
-    os.makedirs(fig_dir, exist_ok=True)
-
-    sn_ = pandas.read_csv('gri_pr.csv').SN
-    # sn_ = ['SDSS-II SN 13423']
-
-    for sn in sn_:
-        bands = "g',r',i'".split(',')
-
-        k1 = kernels.RBF(length_scale_bounds=(1e-4, 1e4))
-        k2 = kernels.RBF(length_scale_bounds=(1e-4, 1e4))
-        # k2 = kernels.WhiteKernel()
-        # k3 = kernels.ConstantKernel(constant_value_bounds='fixed')
-        k3 = kernels.RBF(length_scale_bounds=(1e-4, 1e4))
-        # k3 = kernels.WhiteKernel()
-
-        m = np.array([[1, 0, 0],
-                      [0.5, 1, 0],
-                      [0.5, 0.5, 1]])
-        m_bounds = (np.array([[1e-4, 0, 0],
-                              [-1e2, -1e3, 0],
-                              [-1e2, -1e2, -1e3]]),
-                    np.array([[1e4, 0, 0],
-                              [1e2, 1e3, 0],
-                              [1e2, 1e2, 1e3]]))
-
-        colors = {'g': 'g', 'r': 'r', 'i': 'brown', "g'": 'g', "r'": 'r', "i'": 'brown'}
-
-        curve = OSCCurve.from_name(sn, bands=bands).binned(bin_width=1, discrete_time=True)
-        # curve = curve.set_error(rel=0.1)
-        # curve = curve.transform_upper_limit_to_normal()
-        curve = curve.filtered(sort='filtered')
-        x_ = np.linspace(curve.X[:,1].min(), curve.X[:,1].max(), 101)
-        interpolator = GPInterpolator(
-            curve, (k1, k2, k3), m, m_bounds,
-            normalize_y=False,
-            optimize_method=None,  #'trust-constr',
-            n_restarts_optimizer=0,
-            with_bazin=True,
-            raise_on_bounds=False,
-            add_err=0,
-            random_state=0,
-        )
-        msd = interpolator(x_, compute_err=True)
-        msd_bazin = interpolator.bazin(x_)
-        plt.clf()
-        plt.title(sn)
-        for i, band in enumerate(bands):
-            plt.subplot(2, 2, i+1)
-            blc = curve[band]
-            plt.errorbar(blc['x'], blc['y'], blc['err'], marker='x', ls='', color=colors[band])
-            plt.plot(msd.odict[band].x, msd.odict[band].y, color=colors[band], label=band)
-            plt.fill_between(msd.odict[band].x,
-                             msd.odict[band].y-msd.odict[band].err, msd.odict[band].y+msd.odict[band].err,
-                             color='grey', alpha=0.2)
-            plt.plot(msd_bazin.odict[band].x, msd_bazin.odict[band].y, '--', color=colors[band])
-            plt.ylim([0, None])
-            plt.grid()
-            plt.legend()
-        plt.savefig('fig/{}.png'.format(sn))
