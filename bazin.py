@@ -3,18 +3,17 @@ import numpy as np
 import scipy.optimize
 from collections import OrderedDict
 import warnings
-import matplotlib.pyplot as plt
 
 
-class NansInFluxErrorsError(ValueError):
-    def __init__(self, curve, band):
-        self.message = 'Found unexpected NaN values in light curve errors band {} of {}'.format(band, curve.name)
-        super(NansInFluxErrorsError, self).__init__(self.message)
+class InfiniteFluxErrorsError(ValueError):
+    def __init__(self, name, band):
+        self.message = 'Found unexpected NaN values in light curve errors band {} of {}'.format(band, name)
+        super(InfiniteFluxErrorsError, self).__init__(self.message)
 
 
 class NearlyEmptyFluxError(ValueError):
-    def __init__(self, curve, band):
-        self.message = 'Found nearly empty light curve (len < 2) at band {} of {}'.format(band, curve.name)
+    def __init__(self, name, band):
+        self.message = 'Found nearly empty light curve (len < 2) at band {} of {}'.format(band, name)
         super(NearlyEmptyFluxError, self).__init__(self.message)
 
 
@@ -27,21 +26,26 @@ class BazinFitter:
         MultiStateData to fit
     name: str
         The identification name of data. Used for warnings and errors.
+
+    Raises
+    ------
+    InfiniteFluxErrorsError
+    NearlyEmptyFluxError
     """
 
     def __init__(self, msd, name='unnamed'):
         # Store the curve
-        self.curve = msd
-        self.bands = msd.keys()
+        self.curve = msd.odict
+        self.bands = tuple(msd.keys())
         self.name = name
 
         # Check for errors
         for b in self.bands:
-            if np.any(np.isnan(self.curve[b].err)):
-                raise NansInFluxErrorsError(self.curve, b)
+            if not np.all(np.isfinite(self.curve[b].err)):
+                raise InfiniteFluxErrorsError(self.name, b)
 
             if len(self.curve[b]) < 2:
-                raise NearlyEmptyFluxError(self.curve, b)
+                raise NearlyEmptyFluxError(self.name, b)
 
         # Select the longest band and estimate the initial form parameters
         band_index = np.argmax([len(self.curve[b]) for b in self.bands])
@@ -147,12 +151,15 @@ class BazinFitter:
         (self.rise_time, self.fall_time,
          self.time_shift, self.bottoms,
          self.scales) = self._unpack_params(result.x)
+        return result.fun
 
 
 def _plot_bazin(filename, bazin):
+    import matplotlib.pyplot as plt
+
     curve = bazin.curve
 
-    all_band_x = np.hstack([curve[band].x for band in curve.bands])
+    all_band_x = np.hstack([curve[band].x for band in curve.keys()])
     xx = np.linspace(np.min(all_band_x), np.max(all_band_x))
     approx = bazin(xx)
 
