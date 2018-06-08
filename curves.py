@@ -763,17 +763,17 @@ class OSCCurve(SNCurve):
         return cls(data, **kwargs)
 
     @classmethod
-    def from_name(cls, snname, path=None, **kwargs):
+    def from_name(cls, snname, down_args=FrozenOrderedDict(), **kwargs):
         """Load photometric data by SN name, data may be downloaded
 
         Parameters
         ----------
         snname: string
             sne.space SN name
-        path: string or None, optional
-            Specifies local path of json data, for default see `SNFiles`
+        down_args: dict-like
+            Arguments for SNFiles
         """
-        sn_files = SNFiles([snname], path=path)
+        sn_files = SNFiles([snname], **down_args)
         kwargs['snname'] = snname
         return cls.from_json(sn_files.filepaths[0], **kwargs)
 
