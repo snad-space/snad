@@ -151,6 +151,7 @@ class BazinFitter:
         (self.rise_time, self.fall_time,
          self.time_shift, self.bottoms,
          self.scales) = self._unpack_params(result.x)
+        return result.fun
 
 
 def _plot_bazin(filename, bazin):
