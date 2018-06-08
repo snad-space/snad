@@ -9,8 +9,8 @@ from sklearn.ensemble import IsolationForest
 ########################################################
 
 # path to lc fitted data files
-path_to_data = '../../gri.csv'
-path_to_data_pr = '../../gri_pr.csv'
+path_to_data = '../../gri_renorm.csv'
+path_to_data_pr = '../../gri_pr_renorm.csv'
 
 ######## user choices
 # set random seed
@@ -39,15 +39,9 @@ op1b.close()
 data_str2 = [elem.split(',') for elem in lin1b]
 data_lc2 = [[float(item) for item in line[9:]] for line in data_str2[1:]]
 
-print('   ... done!')
-print('Normalizing light curves ...')
-
 # join lc and gather names in the correct order
-lc_points = np.array(data_lc1 + data_lc2)
+lc_norm = np.array(data_lc1 + data_lc2)
 lc_names = [line[0] for line in data_str1[1:]] + [line[0] for line in data_str2[1:]]
-
-# normalize fitted light curve
-lc_norm = np.array([[item/max(line) for item in line] for line in lc_points])
 
 print('   ... done!')
 
@@ -55,7 +49,7 @@ print('   ... done!')
 
 print('Fit isolation forest model ...') 
 
-clf = IsolationForest(max_samples=100, random_state=rng)
+clf = IsolationForest(max_samples=lc_norm.shape[0], random_state=rng, contamination=0.01, n_estimators=lc_norm.shape[1])
 clf.fit(lc_norm)
 lc_pred = clf.predict(lc_norm)
 
@@ -127,7 +121,7 @@ if False in check_names:
     raise NameError('List of names in parameter files does not correspond to light curve files!')
 
 # normalize parameters
-param_norm = [[param[i][j]/(max(param[:,j]) - min(param[:,j])) for j in np.arange(param.shape[1])] for i in np.arange(param.shape[0])]
+param_norm = np.array([[param[i][j]/(max(param[:,j]) - min(param[:,j])) for j in np.arange(param.shape[1])] for i in np.arange(param.shape[0])])
 
 print('   ... done!')
 
@@ -135,7 +129,7 @@ print('   ... done!')
 
 print('Fit isolation forest model ...') 
 
-clf_param = IsolationForest(max_samples=100, random_state=rng)
+clf_param = IsolationForest(max_samples=param_norm.shape[0], random_state=rng, contamination=0.01, n_estimators=param_norm.shape[1])
 clf_param.fit(param_norm)
 param_pred = clf_param.predict(param_norm)
 
