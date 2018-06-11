@@ -70,7 +70,7 @@ SNS_HAVE_SPECTRA = frozenset((
 ))
 
 SNS_HAVE_NOT_SPECTRA = frozenset((
-    'SN1993A',
+    'Gaia14ado',
 ))
 
 SNS_HAVE_B_BAND = frozenset((
@@ -193,9 +193,9 @@ class DownloadCacheTestCase(BasicSNFilesTestCase):
         self.assertTrue(mock_get_response.called)
 
 
-class SNFilesOfflineMode(BasicSNFilesTestCase):
+class SNFilesOfflineModeTestCase(BasicSNFilesTestCase):
     def setUp(self):
-        super(SNFilesOfflineMode, self).setUp()
+        super(SNFilesOfflineModeTestCase, self).setUp()
         self.snnames_exist = SNS_ALL_TUPLE[:1]
         self.snnames_not_exist = ['c4048589']
         self.sn_files_online = SNFiles(self.snnames_exist, path=self.tmp_dir, offline=False)
@@ -207,6 +207,36 @@ class SNFilesOfflineMode(BasicSNFilesTestCase):
     def test_raises_if_no_file(self):
         with self.assertRaises(ValueError):
             SNFiles(self.snnames_not_exist, path=self.tmp_dir, offline=True)
+
+
+class SNFilesUpdateTestCase(BasicSNFilesTestCase):
+    def setUp(self):
+        super(SNFilesUpdateTestCase, self).setUp()
+        self.snnames = SNS_ALL_TUPLE[:1]
+        SNFiles(self.snnames, path=self.tmp_dir, offline=False)
+
+    @mock.patch.object(SNFiles, '_download')
+    def test_update_false(self, mock_download):
+        SNFiles(self.snnames, path=self.tmp_dir, offline=False, update=False)
+        self.assertFalse(mock_download.called)
+
+    @mock.patch.object(SNFiles, '_download')
+    def test_update_true(self, mock_download):
+        SNFiles(self.snnames, path=self.tmp_dir, offline=False, update=True)
+        self.assertTrue(mock_download.called)
+
+    @mock.patch.object(SNFiles, '_download')
+    def test_offline_update(self, mock_download):
+        SNFiles(self.snnames, path=self.tmp_dir, offline=True, update=True)
+        self.assertFalse(mock_download.called)
+
+    @unittest.skipIf(six.PY2, 'Logging testing is missed in Python 2')
+    def test_offline_update_logging(self):
+        with self.assertLogs(level=logging.WARNING):
+            try:
+                SNFiles(self.snnames, path=self.tmp_dir, offline=True, update=True)
+            except ValueError:
+                pass
 
 
 class LoadSNListFromCSV(unittest.TestCase):

@@ -88,12 +88,18 @@ class SNFiles(SNPaths):
     offline: bool
         No new data will be downloaded. ValueError will be raised if target
         file cannot be found.
+    update: bool
+        Check if new data is available and download it. Useful only when
+        `offline=False`
     """.format(path=SNPaths._path, baseurl=SNPaths._baseurl)
 
     xattr_etag_name = b'user.etag'
 
-    def __init__(self, sns, path=None, baseurl=None, offline=False):
+    def __init__(self, sns, path=None, baseurl=None, offline=False, update=True):
         super(SNFiles, self).__init__(sns, path, baseurl)
+
+        if offline and update:
+            logging.warning('SNFiles.__init__: it is worthless to specify both offline=True and update=True')
 
         if not offline:
             try:
@@ -103,11 +109,14 @@ class SNFiles(SNPaths):
                     raise e
 
         for i, fpath in enumerate(self.filepaths):
-            if offline:
-                if not os.path.exists(fpath):
+            if not os.path.exists(fpath):
+                if offline:
                     raise ValueError("Path {} should exist in offline mode".format(fpath))
+                else:
+                    self._download(fpath, self.urls[i])
             else:
-                self._download(fpath, self.urls[i])
+                if (not offline) and update:
+                    self._download(fpath, self.urls[i])
 
     def _download(self, fpath, url):
         etag = self._get_file_etag(fpath)
@@ -763,17 +772,17 @@ class OSCCurve(SNCurve):
         return cls(data, **kwargs)
 
     @classmethod
-    def from_name(cls, snname, path=None, **kwargs):
+    def from_name(cls, snname, down_args=FrozenOrderedDict(), **kwargs):
         """Load photometric data by SN name, data may be downloaded
 
         Parameters
         ----------
         snname: string
             sne.space SN name
-        path: string or None, optional
-            Specifies local path of json data, for default see `SNFiles`
+        down_args: dict-like
+            Arguments for SNFiles
         """
-        sn_files = SNFiles([snname], path=path)
+        sn_files = SNFiles([snname], **down_args)
         kwargs['snname'] = snname
         return cls.from_json(sn_files.filepaths[0], **kwargs)
 
