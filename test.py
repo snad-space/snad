@@ -70,7 +70,7 @@ SNS_HAVE_SPECTRA = frozenset((
 ))
 
 SNS_HAVE_NOT_SPECTRA = frozenset((
-    'SN1993A',
+    'Gaia14ado',
 ))
 
 SNS_HAVE_B_BAND = frozenset((
