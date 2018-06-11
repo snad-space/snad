@@ -52,10 +52,7 @@ class GPInterpolator(object):
                  random_state=None, add_err=0, raise_on_bounds=True):
         self.curve = curve
         self.with_bazin = with_bazin
-        if optimize_method is None:
-            self.optimizer = 'fmin_l_bfgs_b'  # the default for scikit-learn 0.19
-        else:
-            self.optimizer = self.optimizer(optimize_method)
+        self.optimizer = optimize_method
 
         if self.with_bazin:
             self.bazin = BazinFitter(self.curve, name=self.curve.name)
@@ -72,7 +69,7 @@ class GPInterpolator(object):
             alpha = self.msd.arrays.err**2 + self.msd.arrays.y**2*(add_err/100)**2
             self.regressor = GaussianProcessRegressor(self.kernel,
                                                       alpha=alpha,
-                                                      optimizer=self.optimizer,
+                                                      optimizer=self.get_optimizer(optimize_method),
                                                       n_restarts_optimizer=self.n_restarts_optimizer,
                                                       normalize_y=normalize_y, random_state=self.random_state)
             self.regressor.fit(self.msd.arrays.x, self.msd.arrays.y)
@@ -133,7 +130,10 @@ class GPInterpolator(object):
         return msd_
 
     @staticmethod
-    def optimizer(method='trust-constr'):
+    def get_optimizer(method='trust-constr'):
+        if method is None:
+            return 'fmin_l_bfgs_b'
+
         def f(obj_func, initial_theta, bounds):
             constraints = [optimize.LinearConstraint(np.eye(initial_theta.shape[0]), bounds[:, 0], bounds[:, 1])]
             res = optimize.minimize(lambda theta: obj_func(theta=theta, eval_gradient=False),
