@@ -159,6 +159,8 @@ class GPInterpolator(object):
             if param == 'scale':
                 value = _tri_matrix_to_flat(value)
                 lower_upper = np.array([_tri_matrix_to_flat(m) for m in lower_upper])
+                value[0] = np.log(value[0])
+                lower_upper[:,0] = np.log(lower_upper[:,0])
             else:
                 value = np.log(value)
                 lower_upper = np.log(lower_upper)
