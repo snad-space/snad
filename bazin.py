@@ -17,7 +17,7 @@ class NearlyEmptyFluxError(ValueError):
         super(NearlyEmptyFluxError, self).__init__(self.message)
 
 
-class BazinFitter:
+class BazinFitter(object):
     """Fits the MultiStateData object to Bazin function
 
     Parameters
@@ -54,6 +54,9 @@ class BazinFitter:
 
         # Estimate the scales for all the bands
         (self.bottoms, self.scales) = self._estimate_scales()
+
+        # Obtain errors in flat array for fitting
+        # self.errors = np.hstack(self.curve[band].y_err for band in self.bands)
 
     def _estimate_form(self, band):
         band_curve = self.curve[band]
@@ -117,13 +120,26 @@ class BazinFitter:
         return bottom + scale / form
 
     @staticmethod
+    def _evaluate_gradient(x, rise_time, fall_time, time_shift, bottom, scale):
+        form = np.exp((x - time_shift) / fall_time) + np.exp((time_shift - x) / rise_time)
+        common_mul = scale / form ** 2
+        grad = np.empty((len(x), 5))
+        grad[:, 0] = common_mul * np.exp((time_shift - x) / rise_time) * (time_shift - x) / rise_time ** 2
+        grad[:, 1] = common_mul * np.exp((x - time_shift) / fall_time) * (x - time_shift) / fall_time ** 2
+        grad[:, 2] = common_mul * (np.exp((x - time_shift) / fall_time) / fall_time -
+                                   np.exp((time_shift - x) / rise_time) / rise_time)
+        grad[:, 3] = 1
+        grad[:, 4] = 1 / form
+        return grad
+
+    @staticmethod
     def _pack_params(rise, fall, shift, bottoms, scales):
         return np.hstack((rise, fall, shift, bottoms, scales))
 
     def _unpack_params(self, params):
         # rise, fall, shift, bottoms, scales
         n = len(self.bottoms)
-        return params[0], params[1], params[2], params[3: 3 + n], params[3 + n: 3 + 2 * n]
+        return params[0], params[1], params[2], params[3: 3 + n], params[3 + n: 3 + 2 * n] # Some more Fortran
 
     def _residuals(self, params):
         (rise_time, fall_time, time_shift, bottoms, scales) = self._unpack_params(params)
@@ -140,18 +156,60 @@ class BazinFitter:
 
         return np.hstack(residuals)
 
-    def fit(self):
+    def _residuals_gradient(self, params):
+        (rise_time, fall_time, time_shift, bottoms, scales) = self._unpack_params(params)
+
+        bands_number = len(self.bands)
+        grads = [None] * bands_number
+        params_index = np.arange(5)
+        for band_index in np.arange(bands_number):
+            band = self.bands[band_index]
+            band_curve = self.curve[band]
+            params_index[3] = 3 + band_index # Ahhh, sweet Fortran77.
+            params_index[4] = 3 + bands_number + band_index # Who the hell know how to do this right?
+            grads[band_index] = np.zeros((len(self.curve[band]), 9))
+            band_grad = self._evaluate_gradient(band_curve.x, rise_time,
+                                                fall_time, time_shift,
+                                                bottoms[band_index], scales[band_index])
+            band_grad /= np.reshape(band_curve.err, (-1, 1))
+            grads[band_index][:, params_index] = band_grad
+
+        return np.vstack(grads)
+
+    def fit(self, use_gradient=True):
         parameters = self._pack_params(self.rise_time, self.fall_time, self.time_shift, self.bottoms, self.scales)
-        n = len(self.bottoms)
-        zeros = np.zeros(n)
-        infties = np.repeat(np.inf, n)
+        bands_number = len(self.bottoms)
+
+        # Calculate the scales for the least squares
+        bottom_scales = np.empty(bands_number)
+        scales_scales = np.empty(bands_number)
+        times = [None] * bands_number
+        for band_index in np.arange(bands_number):
+            band = self.bands[band_index]
+            bottom_scales[band_index] = np.min(self.curve[band].y)
+            scales_scales[band_index] = np.max(self.curve[band].y) - bottom_scales[band_index]
+            times[band_index] = self.curve[band].x
+
+        time_scale = np.mean(np.hstack(times))
+        p_scales = self._pack_params(10.0, 20.0, time_scale, bottom_scales, scales_scales)
+
+        # Set the boundaries
+        zeros = np.zeros(bands_number)
+        infties = np.repeat(np.inf, bands_number)
         bounds = (self._pack_params(1, 1, -np.inf, zeros, zeros),
                   self._pack_params(50, 200, +np.inf, infties, infties))
-        result = scipy.optimize.least_squares(self._residuals, parameters, bounds=bounds)
+
+        optimargs = {}
+        if use_gradient:
+            optimargs['jac'] = self._residuals_gradient
+
+        result = scipy.optimize.least_squares(self._residuals, parameters, bounds=bounds, x_scale=p_scales, **optimargs)
         (self.rise_time, self.fall_time,
          self.time_shift, self.bottoms,
          self.scales) = self._unpack_params(result.x)
-        return result.fun
+
+        # The residuals should be renormalized
+        return result.fun * np.hstack(self.curve[band].err for band in self.bands)
 
 
 def _plot_bazin(filename, bazin):
