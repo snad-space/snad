@@ -1,6 +1,6 @@
 ### Python ###
 
-# Byte-copiled
+# Byte-compiled
 __pycache__/
 *.pyc
 
@@ -10,6 +10,10 @@ dist/
 *.egg-info/
 
 
+### PyCharm ###
+.idea/
+
+
 ### Jupyter ###
 .ipynb_checkpoints/
 
@@ -17,6 +21,7 @@ dist/
 ### Figures ###
 *.pdf
 *.eps
+*.png
 
 
 ### SN data base ###
