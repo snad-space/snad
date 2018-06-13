@@ -70,7 +70,7 @@ def _interp(sn, plot=True, with_bazin=True):
             plt.grid()
             plt.legend()
         plt.savefig('fig/{}.png'.format(sn))
-    # return sn, interpolator
+    return sn, interpolator
 
 
 if __name__ == '__main__':
@@ -86,3 +86,4 @@ if __name__ == '__main__':
 
     with multiprocessing.Pool() as p:
         result = p.map(_interp, sn_[:10])
+    print(result)

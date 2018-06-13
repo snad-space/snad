@@ -1,3 +1,4 @@
+from functools import partial
 from pprint import pformat
 
 import numpy as np
@@ -130,11 +131,7 @@ class GPInterpolator(object):
         return msd_
 
     @staticmethod
-    def get_optimizer(method='trust-constr'):
-        if method is None:
-            return 'fmin_l_bfgs_b'
-
-        def f(obj_func, initial_theta, bounds):
+    def _optimizer(obj_func, initial_theta, bounds, method):
             constraints = [optimize.LinearConstraint(np.eye(initial_theta.shape[0]), bounds[:, 0], bounds[:, 1])]
             res = optimize.minimize(lambda theta: obj_func(theta=theta, eval_gradient=False),
                                     initial_theta,
@@ -145,7 +142,13 @@ class GPInterpolator(object):
                                     options={'gtol': 1e-6})
             return res.x, res.fun
 
-        return f
+
+    @staticmethod
+    def get_optimizer(method='trust-constr'):
+        if method is None:
+            return 'fmin_l_bfgs_b'
+
+        return partial(GPInterpolator._optimizer, method=method)
 
     @staticmethod
     def is_near_bounds(kernel, rtol=1e-4):
