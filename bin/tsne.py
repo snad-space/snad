@@ -21,8 +21,8 @@ def do_metric(X1, X2):
 	return np.inner(z,z)
 
 inp_files = [
-	('gri_pr.csv', 'theta_pr.csv'),
-	('gri.csv', 'theta.csv'),
+	('../gri_pr.csv', '../theta_pr.csv'),
+	('../gri.csv', '../theta.csv'),
 ]
 
 dfs = [(pd.read_csv(lc), pd.read_csv(theta)) for lc, theta in inp_files]

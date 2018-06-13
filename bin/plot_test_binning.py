@@ -6,9 +6,9 @@ import numpy as np
 
 from curves import OSCCurve
 
-JSON_PATH = 'test_binning.json'
+JSON_PATH = '../test_binning.json'
 BAND = 'X'
-PNG_PATH = 'test_binning.png'
+PNG_PATH = '../test_binning.png'
 
 
 def plot(lc, size=1):
