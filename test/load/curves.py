@@ -3,6 +3,7 @@
 import json
 import logging
 import operator
+import os
 import unittest
 from functools import reduce
 
@@ -16,8 +17,9 @@ from thesnisright.load.curves import OSCCurve, SNFiles, NoPhotometryError, Empty
 from ._sn_lists import *
 
 
-TRIANGLE_JSON_PATH = 'test_triangle.json'
-BINNING_JSON_PATH = 'test_binning.json'
+_dir_path = os.path.dirname(__file__)
+TRIANGLE_JSON_PATH = os.path.join(_dir_path, 'data/test_triangle.json')
+BINNING_JSON_PATH = os.path.join(_dir_path, 'data/test_binning.json')
 
 
 def _get_curves(sns, *args, **kwargs):
