@@ -20,7 +20,7 @@ try:
 except ImportError:
     import mock
 
-from curves import OSCCurve, SNFiles, NoPhotometryError, EmptyPhotometryError
+from thesnisright.load.curves import OSCCurve, SNFiles, NoPhotometryError, EmptyPhotometryError
 
 
 TRIANGLE_JSON_PATH = 'test_triangle.json'

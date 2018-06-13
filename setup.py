@@ -1,12 +1,12 @@
 #!/usr/bin/env python
 
-from setuptools import setup
+from setuptools import setup, find_packages
 
 setup(
     name='theSNisRight',
     license='MIT',
     author='Konstantin Malanchev',
     author_email='malanchev@physics.msu.ru',
-    py_modules=['curves'],
-    test_suite='test',
+    packages=find_packages(exclude=['test']),
+    test_suite='test.test',
 )
