@@ -8,5 +8,5 @@ setup(
     author='Konstantin Malanchev',
     author_email='malanchev@physics.msu.ru',
     packages=find_packages(exclude=['test']),
-    test_suite='test.test',
+    test_suite='test',
 )

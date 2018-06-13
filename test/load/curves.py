@@ -2,258 +2,26 @@
 
 import json
 import logging
-import mmap
 import operator
-import requests
-import shutil
 import unittest
 from functools import reduce
-from tempfile import mkdtemp, NamedTemporaryFile
 
 import numpy as np
 import six
-from six import BytesIO, iteritems, itervalues
+from six import iteritems, itervalues
 from numpy.testing import assert_allclose, assert_equal
 
-try:
-    from unittest import mock
-except ImportError:
-    import mock
-
 from thesnisright.load.curves import OSCCurve, SNFiles, NoPhotometryError, EmptyPhotometryError
+
+from ._sn_lists import *
 
 
 TRIANGLE_JSON_PATH = 'test_triangle.json'
 BINNING_JSON_PATH = 'test_binning.json'
 
-SNS_NO_CMAIMED_TYPE = frozenset((
-    'SNLS-03D3ce',
-))
-
-SNS_UPPER_LIMIT = frozenset((
-    'SNLS-04D3fq',
-    'PS1-10ahf',
-    'MLS121209:093512+152855',
-))
-
-SNS_E_LOWER_UPPER_MAGNITUDE = frozenset((
-    'SNLS-04D3fq',
-))
-
-SNE_E_TIME = frozenset((
-    'MLS121209:093512+152855',
-))
-
-SNS_UNORDERED_PHOTOMETRY = frozenset((
-    'PTF09atu',
-    'PS1-10ahf',
-))
-
-SNS_HAVE_ZERO_E_MAGNITUDE = frozenset((
-    'Gaia14ado',
-))
-
-SNS_HAVE_NOT_PHOTOMETRY = frozenset((
-    'GRB 081025A',
-))
-
-SNS_HAVE_NOT_MAGN_ERRORS = frozenset((
-    'SN2005V',
-))
-
-SNS_ZERO_VALID_PHOTOMETRY_DOTS = frozenset((
-    'SN2007bk',
-))
-
-SNS_HAVE_SPECTRA = frozenset((
-    'SNLS-04D3fq',
-))
-
-SNS_HAVE_NOT_SPECTRA = frozenset((
-    'Gaia14ado',
-))
-
-SNS_HAVE_B_BAND = frozenset((
-    'SN1993A',
-))
-
-SNS_ALL = frozenset.union(SNS_NO_CMAIMED_TYPE, SNS_UPPER_LIMIT, SNS_E_LOWER_UPPER_MAGNITUDE, SNE_E_TIME,
-                          SNS_UNORDERED_PHOTOMETRY, SNS_HAVE_ZERO_E_MAGNITUDE, SNS_HAVE_B_BAND)
-SNS_ALL_TUPLE = tuple(sorted(SNS_ALL))
-
 
 def _get_curves(sns, *args, **kwargs):
     return [OSCCurve.from_name(sn, *args, **kwargs) for sn in sns]
-
-
-class BasicSNFilesTestCase(unittest.TestCase):
-    def setUp(self):
-        self.tmp_dir = mkdtemp(prefix='tmpsne')
-
-    def tearDown(self):
-        shutil.rmtree(self.tmp_dir)
-
-    def _check_file_is_json(self, fpath):
-        with open(fpath) as fp:
-            try:
-                json.load(fp)
-            except json.JSONDecodeError as e:
-                self.fail(str(e))
-
-    def _check_file_contains_SN_name(self, fpath, snname):
-        with open(fpath, 'r+') as fp:
-            s = mmap.mmap(fp.fileno(), 0)
-            if six.PY2:
-                snname_bytes = snname
-            else:
-                snname_bytes = snname.encode('utf-8')
-            try:
-                self.assertNotEqual(s.find(snname_bytes), -1,
-                                    msg="File {} doesn't contain name of SN '{}'".format(fpath, snname))
-            finally:
-                s.close()
-
-    def check_SNfiles(self, sn_files):
-        for i, fpath in enumerate(sn_files.filepaths):
-            self._check_file_is_json(fpath)
-            self._check_file_contains_SN_name(fpath, sn_files[i])
-
-
-class DownloadFromSneTestCase(BasicSNFilesTestCase):
-    def test_list_download(self):
-        sn_files = SNFiles(SNS_ALL, path=self.tmp_dir, offline=False)
-        self.check_SNfiles(sn_files)
-
-    def test_not_found_raises(self):
-        snname = '8cbac453'
-        with self.assertRaises(requests.HTTPError):
-            SNFiles([snname], path=self.tmp_dir, offline=False)
-
-
-class DownloadCacheTestCase(BasicSNFilesTestCase):
-    etag1 = b'1'
-    etag2 = b'2'
-    content = b'1'
-
-    def response_template(self):
-        r = requests.Response()
-        r.status_code = 200
-        r.raw = BytesIO(self.content)
-        return r
-
-    def setUp(self):
-        super(DownloadCacheTestCase, self).setUp()
-        self.snnames = SNS_ALL_TUPLE[:1]
-
-    @mock.patch.object(SNFiles, '_get_response')
-    @mock.patch.object(SNFiles, '_set_file_etag')
-    @mock.patch.object(SNFiles, '_get_file_etag', return_value=etag1)
-    def test_download_after_etag_update(self, mock_get_file_etag, mock_set_file_etag, mock_get_response):
-        response = self.response_template()
-        response.headers = {'etag': self.etag2}
-        mock_get_response.return_value = response
-
-        def set_file_etag_side_effect(fpath, etag):
-            self.assertEqual(etag, self.etag2)
-        mock_set_file_etag.side_effect = set_file_etag_side_effect
-
-        SNFiles(self.snnames, path=self.tmp_dir, offline=False)
-        self.assertTrue(mock_get_file_etag.called)
-        self.assertTrue(mock_get_response.called)
-        self.assertTrue(mock_set_file_etag.called)
-
-    @mock.patch.object(SNFiles, '_get_response')
-    @mock.patch.object(SNFiles, '_set_file_etag')
-    @mock.patch.object(SNFiles, '_get_file_etag', return_value=etag1)
-    def test_not_download_for_same_etag(self, mock_get_file_etag, mock_set_file_etag, mock_get_response):
-        response = self.response_template()
-        response.status_code = 304
-        response.iter_content = mock.Mock()
-        mock_get_response.return_value = response
-
-        def get_response_side_effect(url, etag):
-            self.assertEqual(etag, self.etag1)
-            return mock.DEFAULT
-        mock_get_response.side_effect = get_response_side_effect
-
-        SNFiles(self.snnames, path=self.tmp_dir, offline=False)
-        self.assertTrue(mock_get_file_etag.called)
-        self.assertTrue(mock_get_response.called)
-        response.iter_content.assert_not_called()
-        mock_set_file_etag.assert_not_called()
-
-
-    @mock.patch.object(SNFiles, '_get_response')
-    @mock.patch.object(SNFiles, '_get_file_etag', return_value=None)
-    def test_download_if_no_xatrr(self, mock_get_file_etag, mock_get_response):
-        mock_get_response.return_value = self.response_template()
-
-        SNFiles(self.snnames, path=self.tmp_dir, offline=False)
-        self.assertTrue(mock_get_file_etag.called)
-        self.assertTrue(mock_get_response.called)
-
-
-class SNFilesOfflineModeTestCase(BasicSNFilesTestCase):
-    def setUp(self):
-        super(SNFilesOfflineModeTestCase, self).setUp()
-        self.snnames_exist = SNS_ALL_TUPLE[:1]
-        self.snnames_not_exist = ['c4048589']
-        self.sn_files_online = SNFiles(self.snnames_exist, path=self.tmp_dir, offline=False)
-
-    def test_file_exists(self):
-        sn_files = SNFiles(self.snnames_exist, path=self.tmp_dir, offline=True)
-        self.check_SNfiles(sn_files)
-
-    def test_raises_if_no_file(self):
-        with self.assertRaises(ValueError):
-            SNFiles(self.snnames_not_exist, path=self.tmp_dir, offline=True)
-
-
-class SNFilesUpdateTestCase(BasicSNFilesTestCase):
-    def setUp(self):
-        super(SNFilesUpdateTestCase, self).setUp()
-        self.snnames = SNS_ALL_TUPLE[:1]
-        SNFiles(self.snnames, path=self.tmp_dir, offline=False)
-
-    @mock.patch.object(SNFiles, '_download')
-    def test_update_false(self, mock_download):
-        SNFiles(self.snnames, path=self.tmp_dir, offline=False, update=False)
-        self.assertFalse(mock_download.called)
-
-    @mock.patch.object(SNFiles, '_download')
-    def test_update_true(self, mock_download):
-        SNFiles(self.snnames, path=self.tmp_dir, offline=False, update=True)
-        self.assertTrue(mock_download.called)
-
-    @mock.patch.object(SNFiles, '_download')
-    def test_offline_update(self, mock_download):
-        SNFiles(self.snnames, path=self.tmp_dir, offline=True, update=True)
-        self.assertFalse(mock_download.called)
-
-    @unittest.skipIf(six.PY2, 'Logging testing is missed in Python 2')
-    def test_offline_update_logging(self):
-        with self.assertLogs(level=logging.WARNING):
-            try:
-                SNFiles(self.snnames, path=self.tmp_dir, offline=True, update=True)
-            except ValueError:
-                pass
-
-
-class LoadSNListFromCSV(unittest.TestCase):
-    def test_csv_download(self):
-        with NamedTemporaryFile(mode='w+', suffix='.csv') as fd:
-            with open(fd.name, 'w') as f:
-                f.write('Name\n')
-                f.write('\n'.join(SNS_ALL))
-            sn_files = SNFiles(fd.name)
-            self.assertEqual(set(sn_files), SNS_ALL)
-
-
-class SNFilesReprTestCase(unittest.TestCase):
-    def test_repr(self):
-        sn_files = SNFiles(SNS_ALL)
-        assertRegexp = self.assertRegexpMatches if six.PY2 else self.assertRegex
-        assertRegexp(repr(sn_files), r'SN names:.+')
 
 
 class ReadLightCurvesFromJsonTestCase(unittest.TestCase):
