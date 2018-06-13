@@ -105,3 +105,6 @@ if __name__ == '__main__':
     msd = MultiStateData.from_state_data(items)
     new_msd = BRI_to_gri(msd)
     print(-2.5 * np.log10((new_msd.arrays.y * new_msd.norm)))
+
+
+__all__ = ('VR_to_gri', 'BR_to_gri', 'BRI_to_gri',)
