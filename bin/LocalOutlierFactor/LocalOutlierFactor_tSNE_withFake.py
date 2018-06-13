@@ -36,7 +36,7 @@ data_all = {}
 
 for k in par_num:
     # path to lc fitted data files
-    path_to_data = '../../tsne/tsne_fake_' + str(k) + '.csv'
+    path_to_data = '../../data/tsne/tsne_fake_' + str(k) + '.csv'
 
     print('\n ****    t-SNE nalysis with ', str(k),' parameters    **** \n')
     print('Reading data ...')

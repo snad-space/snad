@@ -9,8 +9,8 @@ from sklearn.ensemble import IsolationForest
 ########################################################
 
 # path to lc fitted data files
-path_to_data = '../../gri_renorm.csv'
-path_to_data_pr = '../../gri_pr_renorm.csv'
+path_to_data = '../../data/gri_renorm.csv'
+path_to_data_pr = '../../data/gri_pr_renorm.csv'
 
 ######## user choices
 # set random seed

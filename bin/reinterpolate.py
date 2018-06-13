@@ -61,7 +61,7 @@ if __name__ == '__main__':
 
     colors = {"g'": 'g', "r'": 'r', "i'": 'brown'}
 
-    df = pd.read_csv('../gri_pr.csv')
+    df = pd.read_csv('../data/gri_pr.csv')
     df = df[['SN','ker1','ker2','ker3','add_err']]
 
     name_list = []
