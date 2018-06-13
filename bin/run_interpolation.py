@@ -3,8 +3,8 @@
 import numpy as np
 from sklearn.gaussian_process import kernels
 
-from curves import OSCCurve
-from interpolate import GPInterpolator, FitFailedError
+from thesnisright import OSCCurve
+from thesnisright.interpolate.interpolate import GPInterpolator, FitFailedError
 
 
 def _interp(sn, plot=True, with_bazin=True):

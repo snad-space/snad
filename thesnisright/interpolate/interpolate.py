@@ -6,7 +6,7 @@ from multistate_kernel import MultiStateKernel
 from scipy import optimize
 from sklearn.gaussian_process import GaussianProcessRegressor
 
-from bazin import BazinFitter
+from .bazin import BazinFitter
 
 
 def _tri_matrix_to_flat(matrix):
