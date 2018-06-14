@@ -1,5 +1,6 @@
 import numpy as np
 import scipy.optimize
+import scipy.linalg
 from collections import OrderedDict
 import warnings
 from multistate_kernel.util import MultiStateData
@@ -55,8 +56,9 @@ class BazinFitter(object):
         # Estimate the scales for all the bands
         (self.bottoms, self.scales) = self._estimate_scales()
 
-        # Obtain errors in flat array for fitting
-        # self.errors = np.hstack(self.curve[band].y_err for band in self.bands)
+        # Places to store the results of fitting and precalculated covariance matrix
+        self.result = None
+        self.covariance = None
 
     def _estimate_form(self, band):
         band_curve = self.curve[band]
@@ -203,13 +205,30 @@ class BazinFitter(object):
         if use_gradient:
             optimargs['jac'] = self._residuals_gradient
 
-        result = scipy.optimize.least_squares(self._residuals, parameters, bounds=bounds, x_scale=p_scales, **optimargs)
+        result = scipy.optimize.least_squares(self._residuals, parameters,
+                                              bounds=bounds, x_scale=p_scales, **optimargs)
+        self.result = result
+
         (self.rise_time, self.fall_time,
          self.time_shift, self.bottoms,
          self.scales) = self._unpack_params(result.x)
 
-        # The residuals should be renormalized
-        return result.fun * np.hstack(self.curve[band].err for band in self.bands)
+        # The residuals should be renormalized. Nope. That's all the wrong thing. Should be restructured.
+#        return result.fun * np.hstack(self.curve[band].err for band in self.bands)
+
+        # Try to calculate covariance matrix
+        if np.all(result.active_mask == 0) and result.fun.size > result.x.size:
+            # The method (and code) is driven from scipy.optimize.curve_fit
+            _, s, vt = scipy.linalg.svd(result.jac, full_matrices=False)
+            threshold = np.finfo(float).eps * max(result.jac.shape) * s[0]
+            s = s[s > threshold]
+            vt = vt[:s.size]
+            covariance = np.dot(vt.T / s ** 2, vt)
+            sigma_sq = 2 * result.cost / (result.fun.size - result.x.size)
+            covariance *= sigma_sq
+            self.covariance = covariance
+        else:
+            self.covariance = None
 
 
 def _plot_bazin(filename, bazin):
