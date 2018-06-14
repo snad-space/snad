@@ -6,8 +6,6 @@ from multistate_kernel import MultiStateKernel
 from scipy import optimize
 from sklearn.gaussian_process import GaussianProcessRegressor
 
-from .bazin import BazinFitter
-
 
 def _tri_matrix_to_flat(matrix):
     return matrix[np.tril_indices_from(matrix)]
@@ -32,8 +30,6 @@ class GPInterpolator(object):
         is None, the default value of `optimizer` argument of
         `sklearn.gaussian_process.GaussianProcessRegressor` will be used
     n_restarts_optimizer: int, optional
-    with_bazin: bool, optional
-        Use BazinFilter to fit data before Gaussian process
     add_err: float, optional
         Additional error for all the data, percent of flux
     raise_on_bounds: bool, optional
@@ -48,38 +44,27 @@ class GPInterpolator(object):
                  kernels, constant_matrix, constant_matrix_bounds,
                  normalize_y=True,
                  optimize_method=None, n_restarts_optimizer=0,
-                 with_bazin=False,
-                 with_gp=True,
                  random_state=None, add_err=0, raise_on_bounds=True):
-        self.curve = curve
-        self.with_bazin = with_bazin
+        self.msd = curve
         self.optimizer = optimize_method
 
-        if self.with_bazin:
-            self.bazin = BazinFitter(self.curve, name=self.curve.name)
-            self.bazin_residual = self.bazin.fit()
-            self.bazin_approx = self.bazin()
-            self.msd = self.curve - self.bazin_approx
-        else:
-            self.msd = self.curve
+        self.n_restarts_optimizer = n_restarts_optimizer
+        self.random_state = random_state
+        self.kernel = MultiStateKernel(kernels, constant_matrix, constant_matrix_bounds)
+        alpha = self.msd.arrays.err**2 + self.msd.arrays.y**2*(add_err/100)**2
+        self.regressor = GaussianProcessRegressor(self.kernel,
+                                                  alpha=alpha,
+                                                  optimizer=self.get_optimizer(optimize_method),
+                                                  n_restarts_optimizer=self.n_restarts_optimizer,
+                                                  normalize_y=normalize_y, random_state=self.random_state)
+        self.regressor.fit(self.msd.arrays.x, self.msd.arrays.y)
+        self.near_bounds = self.is_near_bounds(self.regressor.kernel_)
+        if self.near_bounds and raise_on_bounds:
+            raise FitFailedError(
+                '''Fit was not succeed, some of the values are near bounds. Resulted kernel is
+                {}'''.format(pformat(self.regressor.kernel_.get_params()))
+            )
 
-        if with_gp:
-            self.n_restarts_optimizer = n_restarts_optimizer
-            self.random_state = random_state
-            self.kernel = MultiStateKernel(kernels, constant_matrix, constant_matrix_bounds)
-            alpha = self.msd.arrays.err**2 + self.msd.arrays.y**2*(add_err/100)**2
-            self.regressor = GaussianProcessRegressor(self.kernel,
-                                                      alpha=alpha,
-                                                      optimizer=self.get_optimizer(optimize_method),
-                                                      n_restarts_optimizer=self.n_restarts_optimizer,
-                                                      normalize_y=normalize_y, random_state=self.random_state)
-            self.regressor.fit(self.msd.arrays.x, self.msd.arrays.y)
-            if raise_on_bounds:
-                if self.is_near_bounds(self.regressor.kernel_):
-                    raise FitFailedError(
-                        '''Fit was not succeed, some of the values are near bounds. Resulted kernel is
-                        {}'''.format(pformat(self.regressor.kernel_.get_params()))
-                    )
 
     def __call__(self, x, compute_err=True):
         """Produce median and std of GP realizations
@@ -93,16 +78,13 @@ class GPInterpolator(object):
         -------
         MultiStateData
         """
-        x_ = self.curve.sample(x)
+        x_ = self.msd.sample(x)
         if compute_err:
             y, err = self.regressor.predict(x_, return_std=True)
         else:
             y = self.regressor.predict(x_)
             err = np.full_like(y, np.nan)
-        msd = self.curve.convert_arrays(x_, y, err)
-        if self.with_bazin:
-            msd_bazin = self.bazin(x)
-            msd = msd + msd_bazin
+        msd = self.msd.convert_arrays(x_, y, err)
         return msd
 
     def y_samples(self, x, samples=1, random_state=None):
@@ -120,14 +102,11 @@ class GPInterpolator(object):
         -------
         tuple[MultiStateData]
         """
-        x_ = self.curve.sample(x)
+        x_ = self.msd.sample(x)
         if random_state is None:
             random_state = self.random_state
         y_samples = self.regressor.sample_y(x_, n_samples=samples, random_state=random_state)
-        msd_ = tuple(self.curve.convert_arrays(x_, y_, np.full_like(y_, np.nan)) for y_ in y_samples)
-        if self.with_bazin:
-            msd_bazin = self.bazin(x)
-            msd_ = tuple(msd + msd_bazin for msd in msd_)
+        msd_ = tuple(self.msd.convert_arrays(x_, y_, np.full_like(y_, np.nan)) for y_ in y_samples)
         return msd_
 
     @staticmethod
@@ -141,7 +120,6 @@ class GPInterpolator(object):
                                     hess=optimize.BFGS(),
                                     options={'gtol': 1e-6})
             return res.x, res.fun
-
 
     @staticmethod
     def get_optimizer(method='trust-constr'):
