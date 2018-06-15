@@ -5,7 +5,7 @@ from multistate_kernel import MultiStateKernel
 from scipy import optimize
 from sklearn.gaussian_process import GaussianProcessRegressor
 import pandas as pd
-from interpolate import GPInterpolator
+from thesnisright import GPInterpolator
 
 def get_kernels_from_names(*names):
     #k1 = kernels.RBF(length_scale_bounds=(1e-4, 1e4))
@@ -42,7 +42,7 @@ def get_theta_from_params(params):
 
 if __name__ == '__main__':
     import matplotlib.pyplot as plt
-    from curves import OSCCurve
+    from thesnisright import OSCCurve
     from sklearn.gaussian_process import kernels
 
     bands = "g',r',i'".split(',')
@@ -61,7 +61,7 @@ if __name__ == '__main__':
 
     colors = {"g'": 'g', "r'": 'r', "i'": 'brown'}
 
-    df = pd.read_csv('gri_pr.csv')
+    df = pd.read_csv('../data/gri_pr.csv')
     df = df[['SN','ker1','ker2','ker3','add_err']]
 
     name_list = []
@@ -93,4 +93,4 @@ if __name__ == '__main__':
     sn_name_pd = pd.DataFrame(data={'SN': name_list})
     theta_pd = pd.DataFrame(np.array(theta_list))
     df_c = pd.concat([sn_name_pd.reset_index(drop=True), theta_pd], axis=1)
-    df_c.to_csv("theta.csv")
+    df_c.to_csv("../theta.csv")

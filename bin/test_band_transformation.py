@@ -6,12 +6,13 @@ Created on Thu Jun  7 11:26:56 2018
 @author: florian
 """
 
+from __future__ import print_function
+
 import numpy as np
-import interpolate 
 import matplotlib.pyplot as plt
-from curves import OSCCurve
+from thesnisright import OSCCurve, GPInterpolator
 from sklearn.gaussian_process import kernels
-import band_transformation as bt
+import thesnisright.process.band_transformation as bt
 
 
 
@@ -54,7 +55,7 @@ def plot_lc_trans(sn_list, init_bands):
         
         curve = OSCCurve.from_name(sn_name, bands=bands_jhonson).binned(bin_width=1, discrete_time=True).filtered(sort='filtered')
         x_ = np.linspace(curve.X[:,1].min(), curve.X[:,1].max(), 101)
-        interpolator = interpolate.GPInterpolator(
+        interpolator = GPInterpolator(
             curve, (k1, k2, k3), m, m_bounds,
             optimize_method=None,  #'trust-constr',
             n_restarts_optimizer=0,
@@ -82,7 +83,7 @@ def plot_lc_trans(sn_list, init_bands):
           
         new_msd = bt.BRI_to_gri(msd)
         curve2 = OSCCurve.from_name(sn_name, bands=bands_gri).binned(bin_width=1, discrete_time=True).filtered(sort='filtered')
-        print new_msd.odict.keys()
+        print(new_msd.odict.keys())
         for i, band in enumerate(bands_gri):
             plt.subplot(2, 2, i+1)
             blc = curve2[band]

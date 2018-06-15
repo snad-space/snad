@@ -3,7 +3,7 @@ import numpy as np
 import os
 import seaborn
 
-from sklearn.neighbors import LocalOutlierFactor
+from sklearn.ensemble import IsolationForest
 from collections import Counter
 from itertools import groupby
 
@@ -18,12 +18,6 @@ rng = np.random.RandomState(42)
 # False, True or 'summary', if 'summary' - generate plots only for the objs common in both analysis: full fit + LC parameters
 plot = True
 
-# number of neighbors
-nn = 1000
-
-# number of parameters to be tested
-par_num = np.arange(2,10)
-
 names = []
 indx_all = []
 skip = []
@@ -34,9 +28,9 @@ if not os.path.isdir('anomalies') and plot == True:
 
 data_all = {}
 
-for k in par_num:
+for k in range(2, 10):
     # path to lc fitted data files
-    path_to_data = '../../tsne/tsne_fake_' + str(k) + '.csv'
+    path_to_data = '../../data/tsne/tsne_pr_' + str(k) + '.csv'
 
     print('\n ****    t-SNE nalysis with ', str(k),' parameters    **** \n')
     print('Reading data ...')
@@ -61,12 +55,13 @@ for k in par_num:
 
     print('   ... done!')
 
-    ##### fit and predict from the Local Outlier Factor model ######
+    ##### fit and predict from the isolation forest model ######
 
-    print('Fit local outiler factor model ...') 
+    print('Fit isolation forest model ...') 
 
-    clf = LocalOutlierFactor(n_neighbors=nn, contamination=0.005)
-    pred = clf.fit_predict(data)
+    clf = IsolationForest(max_samples=2000, random_state=rng, n_estimators=1000, contamination=0.02)
+    clf.fit(data)
+    pred = clf.predict(data) 
 
     # index of outlier objects according to the isolation forest algorithm
     indx_iso = [i for i in range(pred.shape[0]) if pred[i] == -1]
@@ -75,7 +70,7 @@ for k in par_num:
     print('Number of outliers from isoforest + tSNE_', str(k),': ', str(len(indx_iso)))
 
     # save names of SNe considered anomalies
-    output_file1 = 'weirdSN_isoforest_tSNE_' + str(k) + 'withFake.dat'
+    output_file1 = 'weirdSN_isoforest_tSNE_' + str(k) + '.dat'
 
     op3 = open(output_file1, 'w')
     for i in range(len(indx_iso)):
@@ -88,7 +83,7 @@ for k in par_num:
         normal = np.array([True if i not in indx_iso else False for i in range(data.shape[0])])
         weird = np.array([True if i in indx_iso else False for i in range(data.shape[0])])
 
-        plt.figure(figsize=(20,20))
+        plt.figure(figsize=(10,10))
         for l1 in range(data.shape[1]):            
             for l2 in range(data.shape[1]):
                 plt.subplot(data.shape[1], data.shape[1], l1*data.shape[1] + l2 + 1)
@@ -103,7 +98,7 @@ for k in par_num:
                     plt.ylabel('p' + str(l2))
 
         plt.tight_layout()
-        plt.savefig('anomalies/tSNE_' + str(k) + '_iso_withFake.png')
+        plt.savefig('anomalies/tSNE_' + str(k) + '_iso.png')
         plt.close('all')
 
     indx_all += indx_iso
@@ -132,9 +127,9 @@ for (c,it) in indx_groups:
 
 
 ### plot
-if plot == 'summary' or plot == True and len(indx_all) > 0:
+if plot == 'summary' or plot == True:
 
-    for k in par_num:
+    for k in range(2,10):
         print('Plotting summary for ' + str(k) + ' parameters.')
 
         normal_all = np.array([True if i not in indx_all else False for i in range(data_all[k].shape[0])])
@@ -155,7 +150,7 @@ if plot == 'summary' or plot == True and len(indx_all) > 0:
                     plt.ylabel('p' + str(l2))
 
         plt.tight_layout()
-        plt.savefig('anomalies/tSNE_' + str(k) + '_iso_withFake_ALL.png')
+        plt.savefig('anomalies/tSNE_' + str(k) + '_iso_ALL.png')
         plt.close('all')
 
 

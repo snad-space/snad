@@ -1,8 +1,8 @@
-import curves
 import numpy as np
 import scipy.optimize
 from collections import OrderedDict
 import warnings
+from multistate_kernel.util import MultiStateData
 
 
 class InfiniteFluxErrorsError(ValueError):
@@ -112,7 +112,7 @@ class BazinFitter(object):
             recarr['err'] = np.zeros(len(xx))
             odict[band] = recarr
 
-        return curves.MultiStateData.from_state_data(odict)
+        return MultiStateData.from_state_data(odict)
 
     @staticmethod
     def _evaluate(x, rise_time, fall_time, time_shift, bottom, scale):
@@ -238,8 +238,10 @@ def _plot_bazin(filename, bazin):
 
 
 if __name__ == '__main__':
+    from thesnisright import OSCCurve
+
     sn = 'ASASSN-14lp'
-    crv = curves.OSCCurve.from_name(sn).filtered(bands=('g', 'r', 'i'))
+    crv = OSCCurve.from_name(sn).filtered(bands=('g', 'r', 'i'))
     bf = BazinFitter(crv, name=sn)
     bf.fit()
     _plot_bazin('', bf)

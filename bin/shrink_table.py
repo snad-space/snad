@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 
 import argparse
-import matplotlib.pyplot as plt
+import os
+
 import numpy as np
 import pandas
 
@@ -54,12 +55,7 @@ if __name__ == '__main__':
     t1 = args.min
     t2 = args.max
     
-    new_file = 'gri_pr_shrinked_{}_{}.csv'.format(t1, t2)
+    new_file = os.path.join(os.path.split(old_file)[0], 'gri_pr_shrinked_{}_{}.csv'.format(t1, t2))
     shrink_file(old_file, new_file, t1, t2)
 
-#    rng_ = np.arange(1, 152, 3)
-#    table = pandas.read_csv(old_file)
-#    count = [count_against_range(table, rng) for rng in rng_]
-#    plt.plot(rng_, count, 'x')
-#    plt.show()
 

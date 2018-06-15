@@ -4,9 +4,9 @@ import matplotlib; matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import numpy as np
 
-from curves import OSCCurve
+from thesnisright import OSCCurve
 
-JSON_PATH = 'test_binning.json'
+JSON_PATH = '../test/load/data/test_binning.json'
 BAND = 'X'
 PNG_PATH = 'test_binning.png'
 
