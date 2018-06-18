@@ -59,7 +59,7 @@ class DownloadFromSneTestCase(BasicSNFilesTestCase):
 
     def test_not_found_raises(self):
         snname = '8cbac453'
-        with self.assertRaises(requests.HTTPError):
+        with self.assertRaises(RuntimeError):
             SNFiles([snname], path=self.tmp_dir, offline=False)
 
 
@@ -78,13 +78,13 @@ class DownloadCacheTestCase(BasicSNFilesTestCase):
         super(DownloadCacheTestCase, self).setUp()
         self.snnames = SNS_ALL_TUPLE[:1]
 
-    @mock.patch.object(SNFiles, '_get_response')
+    @mock.patch.object(requests.Session, 'get')
     @mock.patch.object(SNFiles, '_set_file_etag')
     @mock.patch.object(SNFiles, '_get_file_etag', return_value=etag1)
-    def test_download_after_etag_update(self, mock_get_file_etag, mock_set_file_etag, mock_get_response):
+    def test_download_after_etag_update(self, mock_get_file_etag, mock_set_file_etag, mock_session_get):
         response = self.response_template()
         response.headers = {'etag': self.etag2}
-        mock_get_response.return_value = response
+        mock_session_get.return_value = response
 
         def set_file_etag_side_effect(fpath, etag):
             self.assertEqual(etag, self.etag2)
@@ -92,38 +92,32 @@ class DownloadCacheTestCase(BasicSNFilesTestCase):
 
         SNFiles(self.snnames, path=self.tmp_dir, offline=False)
         self.assertTrue(mock_get_file_etag.called)
-        self.assertTrue(mock_get_response.called)
+        self.assertTrue(mock_session_get.called)
         self.assertTrue(mock_set_file_etag.called)
 
-    @mock.patch.object(SNFiles, '_get_response')
+    @mock.patch.object(requests.Session, 'get')
     @mock.patch.object(SNFiles, '_set_file_etag')
     @mock.patch.object(SNFiles, '_get_file_etag', return_value=etag1)
-    def test_not_download_for_same_etag(self, mock_get_file_etag, mock_set_file_etag, mock_get_response):
+    def test_not_download_for_same_etag(self, mock_get_file_etag, mock_set_file_etag, mock_session_get):
         response = self.response_template()
         response.status_code = 304
         response.iter_content = mock.Mock()
-        mock_get_response.return_value = response
-
-        def get_response_side_effect(url, etag):
-            self.assertEqual(etag, self.etag1)
-            return mock.DEFAULT
-        mock_get_response.side_effect = get_response_side_effect
+        mock_session_get.return_value = response
 
         SNFiles(self.snnames, path=self.tmp_dir, offline=False)
         self.assertTrue(mock_get_file_etag.called)
-        self.assertTrue(mock_get_response.called)
+        self.assertTrue(mock_session_get.called)
         response.iter_content.assert_not_called()
         mock_set_file_etag.assert_not_called()
 
-
-    @mock.patch.object(SNFiles, '_get_response')
+    @mock.patch.object(requests.Session, 'get')
     @mock.patch.object(SNFiles, '_get_file_etag', return_value=None)
-    def test_download_if_no_xatrr(self, mock_get_file_etag, mock_get_response):
-        mock_get_response.return_value = self.response_template()
+    def test_download_if_no_xatrr(self, mock_get_file_etag, mock_session_get):
+        mock_session_get.return_value = self.response_template()
 
         SNFiles(self.snnames, path=self.tmp_dir, offline=False)
         self.assertTrue(mock_get_file_etag.called)
-        self.assertTrue(mock_get_response.called)
+        self.assertTrue(mock_session_get.called)
 
 
 class SNFilesOfflineModeTestCase(BasicSNFilesTestCase):
