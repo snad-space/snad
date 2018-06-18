@@ -16,7 +16,7 @@ except ImportError:
 
 class SNPaths(UserList):
     _path = 'sne/'
-    _baseurl = 'https://sne.space/sne/'
+    _baseurl = 'http://snad.sai.msu.ru/sne/'
 
     def __init__(self, sns, path, baseurl):
         if isinstance(sns, str):
