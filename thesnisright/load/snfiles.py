@@ -90,9 +90,9 @@ class SNFiles(SNPaths):
 
         if not offline:
             try:
-                os.makedirs(self._path)
+                os.makedirs(self.path)
             except OSError as e:
-                if not os.path.isdir(self._path):
+                if not os.path.isdir(self.path):
                     raise e
 
         for i, fpath in enumerate(self.filepaths):

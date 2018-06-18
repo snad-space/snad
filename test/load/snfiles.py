@@ -1,6 +1,7 @@
 import json
 import logging
 import mmap
+import os
 import shutil
 import unittest
 from tempfile import mkdtemp, NamedTemporaryFile
@@ -17,6 +18,19 @@ except ImportError:
 from thesnisright.load.snfiles import SNFiles
 
 from ._sn_lists import *
+
+
+class SNFilesDifferentPathTestCase(unittest.TestCase):
+    def setUp(self):
+        self.parent_dir = mkdtemp()
+
+    def tearDown(self):
+        shutil.rmtree(self.parent_dir)
+
+    def test_dir_made(self):
+        path = os.path.join(self.parent_dir, 'supernova')
+        SNFiles([], path=path)
+        self.assertTrue(os.path.isdir(path))
 
 
 class BasicSNFilesTestCase(unittest.TestCase):
