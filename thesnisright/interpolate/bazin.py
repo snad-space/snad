@@ -207,7 +207,7 @@ class BazinFitter(object):
             band_curve = self.curve[band]
             params_index[3] = 3 + band_index # Ahhh, sweet Fortran77.
             params_index[4] = 3 + bands_number + band_index # Who the hell know how to do this right?
-            grads[band_index] = np.zeros((len(self.curve[band]), 9))
+            grads[band_index] = np.zeros((len(self.curve[band]), 3 + 2 * bands_number))
             band_grad = self._evaluate_gradient(band_curve.x, rise_time,
                                                 fall_time, time_shift,
                                                 bottoms[band_index], scales[band_index])
