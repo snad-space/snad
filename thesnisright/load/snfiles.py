@@ -16,7 +16,7 @@ except ImportError:
 
 class SNPaths(UserList):
     _path = 'sne/'
-    _baseurl = 'https://sne.space/sne/'
+    _baseurl = 'http://snad.sai.msu.ru/sne/'
 
     def __init__(self, sns, path, baseurl):
         if isinstance(sns, str):
@@ -95,30 +95,34 @@ class SNFiles(SNPaths):
                 if not os.path.isdir(self.path):
                     raise e
 
-        for i, fpath in enumerate(self.filepaths):
-            if not os.path.exists(fpath):
-                if offline:
+        if offline:
+            for fpath in self.filepaths:
+                if not os.path.isfile(fpath):
                     raise ValueError("Path {} should exist in offline mode".format(fpath))
-                else:
-                    self._download(fpath, self.urls[i])
-            else:
-                if (not offline) and update:
-                    self._download(fpath, self.urls[i])
-
-    def _download(self, fpath, url):
-        etag = self._get_file_etag(fpath)
-
-        response = self._get_response(url, etag)
-        if response.status_code == requests.codes.not_modified:
-            logging.info('File {} is up to data, skip downloading'.format(fpath))
             return
-        elif response.status_code != requests.codes.ok:
-            raise RuntimeError('HTTP status code should be 200 or 304, not {}'.format(response.status_code))
 
-        logging.info('Downloading {} to {}'.format(url, fpath))
-        with open(fpath, 'wb') as fd:
-            for chunk in response.iter_content(chunk_size=4096):
-                fd.write(chunk)
+        with requests.session() as session:
+            for i, fpath in enumerate(self.filepaths):
+                if update or not os.path.exists(fpath):
+                    self._download(fpath, self.urls[i], session=session)
+
+    def _download(self, fpath, url, session=requests):
+        etag = self._get_file_etag(fpath)
+        headers = {}
+        if etag is not None:
+            headers['If-None-Match'] = etag
+
+        with session.get(url, stream=True, headers=headers) as response:
+            if response.status_code == requests.codes.not_modified:
+                logging.info('File {} is up to data, skip downloading'.format(fpath))
+                return
+            elif response.status_code != requests.codes.ok:
+                raise RuntimeError('HTTP status code should be 200 or 304, not {}'.format(response.status_code))
+
+            logging.info('Downloading {} to {}'.format(url, fpath))
+            with open(fpath, 'wb') as fd:
+                for chunk in response.iter_content(chunk_size=4096):
+                    fd.write(chunk)
 
         if 'etag' in response.headers:
             self._set_file_etag(fpath, response.headers['etag'])
@@ -138,11 +142,3 @@ class SNFiles(SNPaths):
             etag = etag.encode('utf-8')
         xattr.setxattr(fpath, self.xattr_etag_name, etag)
 
-    @staticmethod
-    def _get_response(url, etag=None):
-        headers = {}
-        if etag is not None:
-            headers['If-None-Match'] = etag
-        r = requests.get(url, stream=True, headers=headers)
-        r.raise_for_status()
-        return r
