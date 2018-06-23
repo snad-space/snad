@@ -40,7 +40,18 @@ class TestBazinFitter(unittest.TestCase):
         self.assertRelativelyEqual(self.bf.rise_time, self.rise_time, eps)
         self.assertRelativelyEqual(self.bf.fall_time, self.fall_time, eps)
 
-    def test_residuals(self):
-        x = np.array([3.0])
-        msd = self.bf(x, fill_error = True)
-        self.assertTrue(msd.odict['r']['err'] > 0)
+    def test_residuals_positivity(self):
+        original_x = self.msd.odict['r']['x']
+        left = np.min(original_x)
+        right = np.max(original_x)
+        x = np.linspace(1.25 * left - 0.25 * right, 1.25 * right - 0.25 * left)
+        msd = self.bf(x, fill_error=True)
+        self.assertTrue(np.all(msd.odict['r']['err'] > 0))
+
+    def test_residuals_validity(self):
+        approx_msd = self.bf(fill_error=True)
+        real_errors = approx_msd.odict['r']['y'] - self.msd.odict['r']['y']
+        hits_and_misses = np.abs(real_errors) < approx_msd.odict['r']['err']
+        rate_of_hits = np.count_nonzero(hits_and_misses) / len(hits_and_misses)
+        self.assertLess(rate_of_hits, 0.9)
+        self.assertGreater(rate_of_hits, 0.5)
