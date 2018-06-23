@@ -123,9 +123,9 @@ class BazinFitter(object):
         bands_number = len(self.bands)
         band_index = self.bands.index(band)
         params_index = np.arange(5)
-        params_index[3] = 3 + band_index # Don't act like that, kids.
-        params_index[4] = 3 + bands_number + band_index # That's not a good code really.
-        covariance = self.covariance[params_index, params_index]
+        params_index[3] = 3 + band_index  # Don't act like that, kids.
+        params_index[4] = 3 + bands_number + band_index  # That's not a good code really.
+        covariance = self.covariance[np.ix_(params_index, params_index)]
 
         grads = self._evaluate_gradient(x, self.rise_time,
                                         self.fall_time, self.time_shift,
@@ -133,7 +133,7 @@ class BazinFitter(object):
         errors = np.empty(x.shape)
         for index in np.arange(len(errors)):
             g = grads[index]
-            errors[index] = np.sum(g.T.dot(covariance) * g.T)
+            errors[index] = np.sqrt(np.sum(g.T.dot(covariance) * g.T))
 
         return errors
 
