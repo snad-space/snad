@@ -1,5 +1,6 @@
 import numpy as np
 import scipy.optimize
+import scipy.linalg
 from collections import OrderedDict
 import warnings
 from multistate_kernel.util import MultiStateData
@@ -15,6 +16,19 @@ class NearlyEmptyFluxError(ValueError):
     def __init__(self, name, band):
         self.message = 'Found nearly empty light curve (len < 2) at band {} of {}'.format(band, name)
         super(NearlyEmptyFluxError, self).__init__(self.message)
+
+
+class NoFitPerformedError(ValueError):
+    def __init__(self, name):
+        self.message = 'Some method relying on fitting results called before fit itself for {}'.format(name)
+        super(NoFitPerformedError, self).__init__(self.message)
+
+
+class FitCovarianceMissingError(ValueError):
+    def __init__(self, name):
+        self.message = 'Missing covariance data requested for {}. '.format(name) +\
+                       'Possible reasons are misfit or fit at the bounds.'
+        super(FitCovarianceMissingError, self).__init__(self.message)
 
 
 class BazinFitter(object):
@@ -55,8 +69,9 @@ class BazinFitter(object):
         # Estimate the scales for all the bands
         (self.bottoms, self.scales) = self._estimate_scales()
 
-        # Obtain errors in flat array for fitting
-        # self.errors = np.hstack(self.curve[band].y_err for band in self.bands)
+        # Places to store the results of fitting and precalculated covariance matrix
+        self.result = None
+        self.covariance = None
 
     def _estimate_form(self, band):
         band_curve = self.curve[band]
@@ -92,12 +107,51 @@ class BazinFitter(object):
         return bottoms, scales
 
     def band_approximation(self, band, x):
+        """Evaluates the approximation at the specific band."""
+
         b = self.bands.index(band)
         return self._evaluate(x, self.rise_time,
                               self.fall_time, self.time_shift,
                               self.bottoms[b], self.scales[b])
 
-    def __call__(self, x=None):
+    def band_approximation_error(self, band, x):
+        """Estimates the errors of approximation at the specific band."""
+
+        if self.covariance is None:
+            if self.result is None:
+                raise NoFitPerformedError(self.name)
+            else:
+                raise FitCovarianceMissingError(self.name)
+
+        bands_number = len(self.bands)
+        band_index = self.bands.index(band)
+        params_index = np.arange(5)
+        params_index[3] = 3 + band_index  # Don't act like that, kids.
+        params_index[4] = 3 + bands_number + band_index  # That's not a good code really.
+        covariance = self.covariance[np.ix_(params_index, params_index)]
+
+        grads = self._evaluate_gradient(x, self.rise_time,
+                                        self.fall_time, self.time_shift,
+                                        self.bottoms[band_index], self.scales[band_index])
+        errors = np.empty(x.shape)
+        for index in np.arange(len(errors)):
+            g = grads[index]
+            errors[index] = np.sqrt(np.sum(g.T.dot(covariance) * g.T))
+
+        return errors
+
+    def __call__(self, x=None, fill_error=False):
+        """Evaluates the approximation for all the bands.
+
+        Parameters
+        ----------
+        x: 1-d ndarray or None
+            Either evaluate all the bands at the specific x values, or use initial
+            ones when the supplied x is equal to None.
+        fill_error: bool
+            Should the approximation errors be estimated.
+        """
+
         odict = OrderedDict()
 
         xx = x
@@ -109,7 +163,7 @@ class BazinFitter(object):
             recarr = np.recarray(len(xx), [('x', 'd'), ('y', 'd'), ('err', 'd')])
             recarr['x'] = xx
             recarr['y'] = self.band_approximation(band, xx)
-            recarr['err'] = np.zeros(len(xx))
+            recarr['err'] = self.band_approximation_error(band, xx) if fill_error else np.zeros(len(xx))
             odict[band] = recarr
 
         return MultiStateData.from_state_data(odict)
@@ -167,7 +221,7 @@ class BazinFitter(object):
             band_curve = self.curve[band]
             params_index[3] = 3 + band_index # Ahhh, sweet Fortran77.
             params_index[4] = 3 + bands_number + band_index # Who the hell know how to do this right?
-            grads[band_index] = np.zeros((len(self.curve[band]), 9))
+            grads[band_index] = np.zeros((len(self.curve[band]), 3 + 2 * bands_number))
             band_grad = self._evaluate_gradient(band_curve.x, rise_time,
                                                 fall_time, time_shift,
                                                 bottoms[band_index], scales[band_index])
@@ -177,6 +231,8 @@ class BazinFitter(object):
         return np.vstack(grads)
 
     def fit(self, use_gradient=True):
+        """Do the main procedure. Fit the initial parameter values to the previousely supplied data."""
+
         parameters = self._pack_params(self.rise_time, self.fall_time, self.time_shift, self.bottoms, self.scales)
         bands_number = len(self.bottoms)
 
@@ -203,13 +259,30 @@ class BazinFitter(object):
         if use_gradient:
             optimargs['jac'] = self._residuals_gradient
 
-        result = scipy.optimize.least_squares(self._residuals, parameters, bounds=bounds, x_scale=p_scales, **optimargs)
+        result = scipy.optimize.least_squares(self._residuals, parameters,
+                                              bounds=bounds, x_scale=p_scales, **optimargs)
+        self.result = result
+
         (self.rise_time, self.fall_time,
          self.time_shift, self.bottoms,
          self.scales) = self._unpack_params(result.x)
 
-        # The residuals should be renormalized
-        return result.fun * np.hstack(self.curve[band].err for band in self.bands)
+        # Try to calculate covariance matrix
+        if np.all(result.active_mask == 0) and result.fun.size > result.x.size:
+            # The method (and code) is driven from scipy.optimize.curve_fit
+            _, s, vt = scipy.linalg.svd(result.jac, full_matrices=False)
+            threshold = np.finfo(float).eps * max(result.jac.shape) * s[0]
+            non_zero_values = s > threshold
+            s = s[non_zero_values]
+            vt = vt[non_zero_values]
+            covariance = np.dot(vt.T / s ** 2, vt)
+            sigma_sq = 2 * result.cost / (result.fun.size - result.x.size)
+            covariance *= sigma_sq
+            self.covariance = covariance
+        else:
+            self.covariance = None
+
+        return 2 * result.cost, result.fun * np.hstack(self.curve[band].err for band in self.bands)
 
 
 def _plot_bazin(filename, bazin):
