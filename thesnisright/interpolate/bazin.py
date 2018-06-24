@@ -272,8 +272,9 @@ class BazinFitter(object):
             # The method (and code) is driven from scipy.optimize.curve_fit
             _, s, vt = scipy.linalg.svd(result.jac, full_matrices=False)
             threshold = np.finfo(float).eps * max(result.jac.shape) * s[0]
-            s = s[s > threshold]
-            vt = vt[:s.size]
+            non_zero_values = s > threshold
+            s = s[non_zero_values]
+            vt = vt[non_zero_values]
             covariance = np.dot(vt.T / s ** 2, vt)
             sigma_sq = 2 * result.cost / (result.fun.size - result.x.size)
             covariance *= sigma_sq
