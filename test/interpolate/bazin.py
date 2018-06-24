@@ -29,16 +29,13 @@ class TestBazinFitter(unittest.TestCase):
         self.bf = BazinFitter(self.msd, name = 'Generated MSD')
         self.bf.fit()
 
-    def assertRelativelyEqual(self, a, b, eps):
-        self.assertTrue(abs(2 * (a - b) / (a + b)) < eps, msg = '{} is not {} with eps = {}'.format(a, b, eps))
-
     def test_fitting(self):
         eps = 0.3
         self.assertLess(abs(self.bf.time_shift), 7)
-        self.assertRelativelyEqual(self.bf.scales[0], self.scale, eps)
-        self.assertRelativelyEqual(self.bf.bottoms[0], self.bottom, eps)
-        self.assertRelativelyEqual(self.bf.rise_time, self.rise_time, eps)
-        self.assertRelativelyEqual(self.bf.fall_time, self.fall_time, eps)
+        np.testing.assert_allclose(self.bf.scales[0], self.scale, rtol=eps)
+        np.testing.assert_allclose(self.bf.bottoms[0], self.bottom, rtol=eps)
+        np.testing.assert_allclose(self.bf.rise_time, self.rise_time, rtol=eps)
+        np.testing.assert_allclose(self.bf.fall_time, self.fall_time, rtol=eps)
 
     def test_residuals_positivity(self):
         original_x = self.msd.odict['r']['x']
