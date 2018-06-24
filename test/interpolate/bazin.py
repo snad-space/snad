@@ -8,7 +8,7 @@ from thesnisright.interpolate.bazin import BazinFitter
 class TestBazinFitter(unittest.TestCase):
 
     def setUp(self):
-        x = np.arange(-20, 50)
+        x = np.arange(-20, 50, 0.5)
         self.sigma = 0.05
         self.fall_time = 20
         self.rise_time = 5
