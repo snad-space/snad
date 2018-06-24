@@ -107,12 +107,15 @@ class BazinFitter(object):
         return bottoms, scales
 
     def band_approximation(self, band, x):
+        """Evaluates the approximation at the specific band."""
+
         b = self.bands.index(band)
         return self._evaluate(x, self.rise_time,
                               self.fall_time, self.time_shift,
                               self.bottoms[b], self.scales[b])
 
     def band_approximation_error(self, band, x):
+        """Estimates the errors of approximation at the specific band."""
 
         if self.covariance is None:
             if self.result is None:
@@ -138,6 +141,17 @@ class BazinFitter(object):
         return errors
 
     def __call__(self, x=None, fill_error=False):
+        """Evaluates the approximation for all the bands.
+
+        Parameters
+        ----------
+        x: 1-d ndarray or None
+            Either evaluate all the bands at the specific x values, or use initial
+            ones when the supplied x is equal to None.
+        fill_error: bool
+            Should the approximation errors be estimated.
+        """
+
         odict = OrderedDict()
 
         xx = x
@@ -217,6 +231,8 @@ class BazinFitter(object):
         return np.vstack(grads)
 
     def fit(self, use_gradient=True):
+        """Do the main procedure. Fit the initial parameter values to the previousely supplied data."""
+
         parameters = self._pack_params(self.rise_time, self.fall_time, self.time_shift, self.bottoms, self.scales)
         bands_number = len(self.bottoms)
 
