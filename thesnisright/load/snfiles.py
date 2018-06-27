@@ -143,3 +143,24 @@ class SNFiles(SNPaths):
             etag = etag.encode('utf-8')
         xattr.setxattr(fpath, self.xattr_etag_name, etag)
 
+
+def all_snad_objects(cat='sne', baseurl='http://snad.sai.msu.ru'):
+    """Get a list of all objects located on SNAD site
+
+    Parameters
+    ----------
+    cat: str, optional
+        Catalog name, default is `'sne'`
+    baseurl: str, optional
+        URL prefix for catalog
+
+    Returns
+    -------
+    list of str
+    """
+    ext = '.json'
+    url = urllib.parse.urljoin(baseurl, cat)
+    response = requests.get(url).json()
+    file_names = (item['name'] for item in response)
+    names = [f[:-len(ext)] for f in file_names if f.endswith(ext)]
+    return names
