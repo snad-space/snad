@@ -416,6 +416,46 @@ class SNCurve(MultiStateData):
             return sn_curve
         return sn_curve, upper_limits
 
+    def does_curve_have_rich_photometry(self, criteria=FrozenOrderedDict([('minimum', 3)])):
+        """Check if curve has enough observations for futher processing
+
+        Parameters
+        ----------
+        criteria: dict
+            Pairs of band and minimum number of observations. Special band names:
+
+             - `'total'` specifies minimum total number of observations, should be
+               at least 1
+             - `'minimum'` specifies minimum number of observations for the least
+               observed band, should be at least 0
+             - `'maximum'` specifies minimum number of observations for the most
+               observed band, should be at least 1
+
+        Returns
+        -------
+        bool
+        """
+        obs_dict = OrderedDict(sorted(((band, lc.x.size) for band, lc in self.odict.items()),
+                                      key=lambda pair: pair[1],
+                                      reverse=True))
+        obs_sizes = tuple(obs_dict.values())
+
+        criteria = dict(criteria)
+        total = criteria.pop('total', 1)
+        if sum(obs_sizes) < total:
+            return False
+        minimum = criteria.pop('minimum', 0)
+        if obs_sizes[-1] < minimum:
+            return False
+        maximum = criteria.pop('maximum', 1)
+        if obs_sizes[0] < maximum:
+            return False
+        for band, value in criteria.items():
+            if obs_dict[band] < value:
+                return False
+
+        return True
+
     @property
     def bands(self):
         return tuple(self.keys())
