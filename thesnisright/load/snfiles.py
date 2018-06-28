@@ -19,12 +19,13 @@ class SNPaths(UserList):
     _baseurl = 'http://snad.sai.msu.ru/sne/'
 
     def __init__(self, sns, path, baseurl):
-        if isinstance(sns, str):
-            sns = self._names_from_csvfile(sns)
-        if not isinstance(sns, Iterable):
+        self.sns = sns
+        if isinstance(self.sns, str):
+            self.sns = self._names_from_csvfile(self.sns)
+        if not isinstance(self.sns, Iterable):
             raise ValueError('sns should be filename or iterable')
 
-        super(SNPaths, self).__init__(sns)
+        super(SNPaths, self).__init__(self.sns)
 
         if path is None:
             path = self._path
@@ -114,7 +115,7 @@ class SNFiles(SNPaths):
 
         with session.get(url, stream=True, headers=headers) as response:
             if response.status_code == requests.codes.not_modified:
-                logging.info('File {} is up to data, skip downloading'.format(fpath))
+                logging.info('File {} is up to date, skip downloading'.format(fpath))
                 return
             elif response.status_code != requests.codes.ok:
                 raise RuntimeError('HTTP status code should be 200 or 304, not {}'.format(response.status_code))
