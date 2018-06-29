@@ -1,12 +1,16 @@
 #!/usr/bin/env python
 
+import os
+
 import numpy as np
 from sklearn.gaussian_process import kernels
 
-from thesnisright import OSCCurve, BazinFitter
-from thesnisright.interpolate.gp import GPInterpolator, FitFailedError
+from thesnisright import OSCCurve, BazinFitter, SNFiles
+from thesnisright.interpolate.gp import GPInterpolator
 
 
+PROJECT_ROOT = os.path.dirname(os.path.dirname(__file__))
+SNE_PATH = os.path.join(PROJECT_ROOT, 'sne')
 COLORS = {'g': 'g', 'r': 'r', 'i': 'brown', "g'": 'g', "r'": 'r', "i'": 'brown'}
 
 
@@ -31,10 +35,10 @@ def _interp(sn, fig_dir='.', plot=True, with_bazin=True):
                           [0, 1e3, 0],
                           [0, 0, 1e3]]))
 
-    orig_curve = OSCCurve.from_name(sn, bands=bands, down_args={'update': False})
+    orig_curve = OSCCurve.from_json(sn, bands=bands)
     curve = orig_curve.binned(bin_width=1, discrete_time=True)
     # curve = curve.set_error(rel=0.1)
-    curve = curve.transform_upper_limit_to_normal()
+    curve = curve.transform_upper_limit_to_normal(y_factor=1e-3, err_factor=3)
     curve = curve.filtered(sort='filtered')
     x_ = np.linspace(curve.X[:, 1].min()-20, curve.X[:, 1].max()+20, 101)
 
@@ -57,6 +61,7 @@ def _interp(sn, fig_dir='.', plot=True, with_bazin=True):
         msd_plus_bazin = msd + msd_bazin
 
     if plot:
+        import matplotlib; matplotlib.use('Agg')
         import matplotlib.pyplot as plt
         plt.clf()
         if with_bazin:
@@ -101,23 +106,24 @@ def _interp(sn, fig_dir='.', plot=True, with_bazin=True):
                                  color='grey', alpha=0.2)
                 plt.grid()
                 plt.legend()
-        plt.savefig(os.path.join(fig_dir, '{}.png'.format(sn)))
+        fig_path = os.path.join(fig_dir, '{}.png'.format(orig_curve.name))
+        print(fig_path)
+        plt.savefig(fig_path)
     return sn, interpolator
 
 
 if __name__ == '__main__':
     import os
-    import pandas
     import multiprocessing
     from functools import partial
 
-    fig_dir = '../fig'
+    fig_dir = os.path.join(PROJECT_ROOT, 'fig')
     os.makedirs(fig_dir, exist_ok=True)
 
-    sn_ = sorted(pandas.read_csv('../data/gri_pr.csv').SN)
-    # _interp('SN2007sk')
+    sn_files = SNFiles(os.path.join(PROJECT_ROOT, 'data/min3obs_g_pr,r_pr,i_pr.csv'),
+                       update=False, path=SNE_PATH)
 
     interp = partial(_interp, fig_dir=fig_dir, plot=True, with_bazin=True)
     with multiprocessing.Pool() as p:
-        result = p.map(interp, sn_)
+        result = p.map(interp, sn_files.filepaths)
     print(result)
