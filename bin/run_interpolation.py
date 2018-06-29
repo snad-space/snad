@@ -17,12 +17,20 @@ COLORS = {'g': 'g', 'r': 'r', 'i': 'brown', "g'": 'g', "r'": 'r', "i'": 'brown'}
 def _interp(sn, fig_dir='.', plot=True, with_bazin=True):
     bands = "g',r',i'".split(',')
 
-    k1 = kernels.RBF(length_scale_bounds=(3, 1e4))
-    k2 = kernels.RBF(length_scale_bounds=(3, 1e4))
+    orig_curve = OSCCurve.from_json(sn, bands=bands)
+    curve = orig_curve.binned(bin_width=1, discrete_time=True)
+    # curve = curve.set_error(rel=0.1)
+    curve = curve.transform_upper_limit_to_normal(y_factor=1e-3, err_factor=3)
+    curve = curve.filtered(sort='filtered')
+    x_ = np.linspace(curve.X[:, 1].min()-20, curve.X[:, 1].max()+20, 101)
+    min_length = [np.max(np.diff(lc.x)) for lc in curve.odict.values()]
+
+    k1 = kernels.RBF(length_scale_bounds=(min_length[0], 1e4))
+    k2 = kernels.RBF(length_scale_bounds=(min_length[1], 1e4))
     # k2 = kernels.WhiteKernel()
     # k2 = kernels.ConstantKernel(constant_value_bounds='fixed')
     # k3 = kernels.ConstantKernel(constant_value_bounds='fixed')
-    k3 = kernels.RBF(length_scale_bounds=(3, 1e4))
+    k3 = kernels.RBF(length_scale_bounds=(min_length[2], 1e4))
     # k3 = kernels.WhiteKernel()
 
     m = np.array([[1, 0, 0],
@@ -34,13 +42,6 @@ def _interp(sn, fig_dir='.', plot=True, with_bazin=True):
                 np.array([[1e4, 0, 0],
                           [0, 1e3, 0],
                           [0, 0, 1e3]]))
-
-    orig_curve = OSCCurve.from_json(sn, bands=bands)
-    curve = orig_curve.binned(bin_width=1, discrete_time=True)
-    # curve = curve.set_error(rel=0.1)
-    curve = curve.transform_upper_limit_to_normal(y_factor=1e-3, err_factor=3)
-    curve = curve.filtered(sort='filtered')
-    x_ = np.linspace(curve.X[:, 1].min()-20, curve.X[:, 1].max()+20, 101)
 
     if with_bazin:
         bazin_fitter = BazinFitter(curve, curve.name)
@@ -73,7 +74,11 @@ def _interp(sn, fig_dir='.', plot=True, with_bazin=True):
         for i, band in enumerate(bands):
             plt.subplot(2, vsize, i + 1)
             if i == 1:
-                plt.title('{}  {}{}'.format(sn, ', '.join(curve.keys()), ' Near bounds'*interpolator.near_bounds))
+                plt.title('{}  {}{}'.format(
+                    orig_curve.name,
+                    ', '.join(curve.keys()),
+                    ' Near bounds'*interpolator.near_bounds
+                ))
 
             blc = orig_curve.odict[band]
             normal = blc[(np.isfinite(blc.err)) & (~blc.isupperlimit)]
@@ -123,7 +128,7 @@ if __name__ == '__main__':
     sn_files = SNFiles(os.path.join(PROJECT_ROOT, 'data/min3obs_g_pr,r_pr,i_pr.csv'),
                        update=False, path=SNE_PATH)
 
-    interp = partial(_interp, fig_dir=fig_dir, plot=True, with_bazin=True)
+    interp = partial(_interp, fig_dir=fig_dir, plot=True, with_bazin=False)
     with multiprocessing.Pool() as p:
         result = p.map(interp, sn_files.filepaths)
     print(result)
