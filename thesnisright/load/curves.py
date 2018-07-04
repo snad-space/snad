@@ -567,6 +567,9 @@ class OSCCurve(SNCurve):
             for field in fields:
                 add_attrs[field] = tuple(func(x['value']) for x in self._json.get(field, []))
         add_attrs['has_spectra'] = 'spectra' in self._json
+        add_attrs['spectrum_count'] = 0
+        if add_attrs['has_spectra']:
+            add_attrs['spectrum_count'] = len(self._json['spectra'])
 
         if 'photometry' not in self._json:
             raise NoPhotometryError(name)
