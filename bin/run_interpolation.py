@@ -14,16 +14,13 @@ SNE_PATH = os.path.join(PROJECT_ROOT, 'sne')
 COLORS = {'g': 'g', 'r': 'r', 'i': 'brown', "g'": 'g', "r'": 'r', "i'": 'brown'}
 
 
-def _interp(sn, fig_dir='.', plot=True, with_bazin=True):
-    bands = "g',r',i'".split(',')
-
+def _interp(sn, bands, peak_band, rng=np.linspace(-50, 100, 151), fig_dir='.', plot=True, with_bazin=True):
     orig_curve = OSCCurve.from_json(sn, bands=bands)
     curve = orig_curve.binned(bin_width=1, discrete_time=True)
     # curve = curve.set_error(rel=0.1)
-    curve = curve.transform_upper_limit_to_normal(y_factor=1e-3, err_factor=3)
+    curve = curve.transform_upper_limit_to_normal(y_factor=1e-3*with_bazin, err_factor=3)
     curve = curve.filtered(sort='filtered')
-    x_ = np.linspace(curve.X[:, 1].min()-20, curve.X[:, 1].max()+20, 101)
-    min_length = [np.max(np.diff(lc.x)) for lc in curve.odict.values()]
+    min_length = [max(1, np.max(np.diff(lc.x))) for lc in curve.odict.values()]
 
     k1 = kernels.RBF(length_scale_bounds=(min_length[0], 1e4))
     k2 = kernels.RBF(length_scale_bounds=(min_length[1], 1e4))
@@ -47,7 +44,6 @@ def _interp(sn, fig_dir='.', plot=True, with_bazin=True):
         bazin_fitter = BazinFitter(curve, curve.name)
         bazin_fitter.fit(use_gradient=True)
         curve = curve - bazin_fitter()
-        msd_bazin = bazin_fitter(x_)
     interpolator = GPInterpolator(
         curve, (k1, k2, k3), m, m_bounds,
         normalize_y=with_bazin,
@@ -57,8 +53,18 @@ def _interp(sn, fig_dir='.', plot=True, with_bazin=True):
         add_err=0,
         random_state=0,
     )
+
+    x_for_peak_search = np.linspace(curve.X[:, 1].min(), curve.X[:, 1].max(), 101)
+    msd_for_peak = interpolator(x_for_peak_search, compute_err=False)
+    if with_bazin:
+        msd_bazin_for_peak = bazin_fitter(x_for_peak_search)
+        msd_for_peak = msd_bazin_for_peak + msd_bazin_for_peak
+    x_peak = msd_for_peak.odict[peak_band].x[np.argmax(msd_for_peak.odict[peak_band].y)]
+    x_ = rng + x_peak
+
     msd = interpolator(x_, compute_err=True)
     if with_bazin:
+        msd_bazin = bazin_fitter(x_)
         msd_plus_bazin = msd + msd_bazin
 
     if plot:
@@ -66,13 +72,12 @@ def _interp(sn, fig_dir='.', plot=True, with_bazin=True):
         import matplotlib.pyplot as plt
         plt.clf()
         if with_bazin:
-            vsize = 3
-            plt.figure(figsize=(10, 6))
+            fig, ax_ = plt.subplots(2, 3, figsize=(10, 6), sharex=True)
         else:
-            vsize = 2
-            plt.figure()
+            fig, ax_ = plt.subplots(1, 3, figsize=(10, 4), sharex=True)
+            ax_ = np.atleast_2d(ax_)
         for i, band in enumerate(bands):
-            plt.subplot(2, vsize, i + 1)
+            plt.sca(ax_[0, i])
             if i == 1:
                 plt.title('{}  {}{}'.format(
                     orig_curve.name,
@@ -97,12 +102,12 @@ def _interp(sn, fig_dir='.', plot=True, with_bazin=True):
             plt.fill_between(odict[band].x,
                              odict[band].y - odict[band].err, odict[band].y + odict[band].err,
                              color='grey', alpha=0.2)
-            plt.ylim([0, None])
+            # plt.ylim([0, None])
             plt.grid()
             plt.legend()
 
             if with_bazin:
-                plt.subplot(2, vsize, i + 4)
+                plt.sca(ax_[1, i])
                 odict = curve.odict[band]
                 plt.errorbar(odict.x, odict.y, odict.err, marker='x', ls='', color=COLORS[band])
                 plt.plot(msd.odict[band].x, msd.odict[band].y, color=COLORS[band], label=band)
@@ -125,10 +130,9 @@ if __name__ == '__main__':
     fig_dir = os.path.join(PROJECT_ROOT, 'fig')
     os.makedirs(fig_dir, exist_ok=True)
 
-    sn_files = SNFiles(os.path.join(PROJECT_ROOT, 'data/min3obs_g_pr,r_pr,i_pr.csv'),
+    sn_files = SNFiles(os.path.join(PROJECT_ROOT, 'data/min3obs_g,r,i.csv'),
                        update=False, path=SNE_PATH)
-
-    interp = partial(_interp, fig_dir=fig_dir, plot=True, with_bazin=False)
+    interp = partial(_interp, bands=("g", "r", "i"), peak_band="r", fig_dir=fig_dir, plot=True, with_bazin=False)
     with multiprocessing.Pool() as p:
         result = p.map(interp, sn_files.filepaths)
     print(result)
