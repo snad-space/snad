@@ -6,11 +6,14 @@ import os
 from collections import OrderedDict
 from functools import partial
 
+import numpy as np
+
 from thesnisright import SNFiles, OSCCurve, get_anderson_sne, get_cccp_sne, get_pantheon_sne_suffixes, get_sanders_sne
 from thesnisright.load.snfiles import all_snad_objects
 from thesnisright.load.curves import EmptyPhotometryError, NoPhotometryError
 
 
+MIN_NUMBER_OF_SPECTRA_FOR_CLASSIFICATION = 3
 PROJECT_ROOT = os.path.dirname(os.path.dirname(__file__))
 SN_SET_ATTRS = ('claimedtype', 'redshift', 'alias')
 SN_NUMBER_ATTRS = ('spectrum_count',)
@@ -49,14 +52,17 @@ def is_rich(file_path, bands):
         raise e
     if not rich:
         return False
+
+    len_bands = tuple(curve.odict.get(band, np.array([])).size for band in bands.split(','))
+    in_samples = tuple(in_sample(curve.name, sample) for sample in SNE_FROM_SAMPLES)
+    is_spec_class = any((curve.spectrum_count >= MIN_NUMBER_OF_SPECTRA_FOR_CLASSIFICATION,) + in_samples)
     attrs_dump = [curve.name]
+    attrs_dump.extend(map(str, len_bands))
     for attr in SN_SET_ATTRS:
         attrs_dump.append(';'.join(map(str, getattr(curve, attr))))
     for attr in SN_NUMBER_ATTRS:
         attrs_dump.append(str(getattr(curve, attr)))
-    in_samples = tuple(in_sample(curve.name, sample) for sample in SNE_FROM_SAMPLES)
     attrs_dump.extend(str(int(x)) for x in in_samples)
-    is_spec_class = any((curve.spectrum_count > 3,) + in_samples)
     attrs_dump.append(str(int(is_spec_class)))
     return ','.join(attrs_dump) + '\n'
 
@@ -74,7 +80,8 @@ def main():
         os.makedirs(data_path, exist_ok=True)
         csv_path = os.path.join(data_path, 'min3obs_{}.csv'.format(bands.replace("'", '_pr')))
         with open(csv_path, 'w') as f:
-            f.write('Name,{},spec_class\n'.format(
+            f.write('Name,{},{},spec_class\n'.format(
+                bands,
                 ','.join(SN_SET_ATTRS + SN_NUMBER_ATTRS + SN_IN_SAMPLE_ATTRS))
             )
             f.writelines(lines)
