@@ -21,6 +21,11 @@ def _interp(sn, bands, peak_band, rng=np.linspace(-50, 100, 151), fig_dir='.', p
     curve = curve.transform_upper_limit_to_normal(y_factor=1e-3*with_bazin, err_factor=3)
     curve = curve.filtered(sort='filtered')
     min_length = [max(1, np.max(np.diff(lc.x))) for lc in curve.odict.values()]
+    x_for_peak_search = np.linspace(curve.X[:, 1].min(), curve.X[:, 1].max(), 101)
+    # add_x = np.array([curve.X[:, 1].min() + rng.min(), curve.X[:, 1].max() + rng.max()])
+    # add_y = np.zeros_like(add_x)
+    # add_err = np.full_like(add_x, curve.y.std() / np.sqrt(curve.y.size))
+    # curve = curve.add_dots(add_x, add_y, add_err)
 
     k1 = kernels.RBF(length_scale_bounds=(min_length[0], 1e4))
     k2 = kernels.RBF(length_scale_bounds=(min_length[1], 1e4))
@@ -31,14 +36,14 @@ def _interp(sn, bands, peak_band, rng=np.linspace(-50, 100, 151), fig_dir='.', p
     # k3 = kernels.WhiteKernel()
 
     m = np.array([[1, 0, 0],
-                  [0.0, 1, 0],
-                  [0.0, 0.0, 1]])
+                  [0.5, 1, 0],
+                  [0.5, 0.5, 1]])
     m_bounds = (np.array([[1e-4, 0, 0],
-                          [0, -1e3, 0],
-                          [0, 0, -1e3]]),
+                          [-1e3, -1e3, 0],
+                          [-1e3, -1e3, -1e3]]),
                 np.array([[1e4, 0, 0],
-                          [0, 1e3, 0],
-                          [0, 0, 1e3]]))
+                          [1e3, 1e3, 0],
+                          [1e3, 1e3, 1e3]]))
 
     if with_bazin:
         bazin_fitter = BazinFitter(curve, curve.name)
@@ -54,7 +59,6 @@ def _interp(sn, bands, peak_band, rng=np.linspace(-50, 100, 151), fig_dir='.', p
         random_state=0,
     )
 
-    x_for_peak_search = np.linspace(curve.X[:, 1].min(), curve.X[:, 1].max(), 101)
     msd_for_peak = interpolator(x_for_peak_search, compute_err=False)
     if with_bazin:
         msd_bazin_for_peak = bazin_fitter(x_for_peak_search)
@@ -132,7 +136,9 @@ if __name__ == '__main__':
 
     sn_files = SNFiles(os.path.join(PROJECT_ROOT, 'data/min3obs_g,r,i.csv'),
                        update=False, path=SNE_PATH)
-    interp = partial(_interp, bands=("g", "r", "i"), peak_band="r", fig_dir=fig_dir, plot=True, with_bazin=False)
+    interp = partial(_interp,
+                     rng=np.r_[-20:100:121j], bands=("g", "r", "i"), peak_band="r",
+                     fig_dir=fig_dir, plot=True, with_bazin=False)
     with multiprocessing.Pool() as p:
         result = p.map(interp, sn_files.filepaths)
     print(result)
