@@ -308,23 +308,11 @@ class SNCurve(MultiStateData):
         """Copy photometry data as MultiStateData"""
         return MultiStateData.from_state_data(self.odict)
 
-    def msd_with_zero_valued_dots(self, x):
-        """Data with dots with given x and zero y and err for all bands
-
-        Parameters
-        ----------
-        x: array-like, shape=(n, )
-
-        Returns
-        -------
-        MultiStateData
-        """
+    def add_dots(self, x, y, err):
         msd = self.multi_state_data()
-        y = np.zeros_like(x)
-        err = np.zeros_like(x)
         dots = {band: np.rec.array([x, y, err], names=('x', 'y', 'err')) for band in self.bands}
         msd.append_dict(dots)
-        return msd
+        return self.convert_msd(msd, is_filtered=self.is_filtered, is_binned=False)
 
     def set_error(self, absolute=0, rel=0):
         """Return new SNCurve with set errors for dots without them
@@ -534,8 +522,6 @@ class OSCCurve(SNCurve):
     ----------
     name: string
         SN name.
-    claimed_type: string or None
-        SN claimed type, None if no claimed type is specified
     bands: frozenset of strings
         Photometric bands that are appeared in `photometry`.
     has_spectra: bool
