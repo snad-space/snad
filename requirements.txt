@@ -1,5 +1,6 @@
 six
 numpy
+pandas
 requests
 cachetools; python_version < '3.2'
 xattr; sys_platform == 'linux' or sys_platform == 'darwin'

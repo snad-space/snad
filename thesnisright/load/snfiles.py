@@ -19,12 +19,13 @@ class SNPaths(UserList):
     _baseurl = 'http://snad.sai.msu.ru/sne/'
 
     def __init__(self, sns, path, baseurl):
-        if isinstance(sns, str):
-            sns = self._names_from_csvfile(sns)
-        if not isinstance(sns, Iterable):
+        self.sns = sns
+        if isinstance(self.sns, str):
+            self.sns = self._names_from_csvfile(self.sns)
+        if not isinstance(self.sns, Iterable):
             raise ValueError('sns should be filename or iterable')
 
-        super(SNPaths, self).__init__(sns)
+        super(SNPaths, self).__init__(self.sns)
 
         if path is None:
             path = self._path
@@ -114,7 +115,7 @@ class SNFiles(SNPaths):
 
         with session.get(url, stream=True, headers=headers) as response:
             if response.status_code == requests.codes.not_modified:
-                logging.info('File {} is up to data, skip downloading'.format(fpath))
+                logging.info('File {} is up to date, skip downloading'.format(fpath))
                 return
             elif response.status_code != requests.codes.ok:
                 raise RuntimeError('HTTP status code should be 200 or 304, not {}'.format(response.status_code))
@@ -142,3 +143,24 @@ class SNFiles(SNPaths):
             etag = etag.encode('utf-8')
         xattr.setxattr(fpath, self.xattr_etag_name, etag)
 
+
+def all_snad_objects(cat='sne', baseurl='http://snad.sai.msu.ru'):
+    """Get a list of all objects located on SNAD site
+
+    Parameters
+    ----------
+    cat: str, optional
+        Catalog name, default is `'sne'`
+    baseurl: str, optional
+        URL prefix for catalog
+
+    Returns
+    -------
+    list of str
+    """
+    ext = '.json'
+    url = urllib.parse.urljoin(baseurl, cat)
+    response = requests.get(url).json()
+    file_names = (item['name'] for item in response)
+    names = [f[:-len(ext)] for f in file_names if f.endswith(ext)]
+    return names
