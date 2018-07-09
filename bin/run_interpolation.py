@@ -20,7 +20,7 @@ def _interp(sn, bands, peak_band, rng=np.linspace(-50, 100, 151), fig_dir='.', p
     # curve = curve.set_error(rel=0.1)
     curve = curve.transform_upper_limit_to_normal(y_factor=1e-3*with_bazin, err_factor=3)
     curve = curve.filtered(sort='filtered')
-    min_length = [max(1, np.max(np.diff(lc.x))) for lc in curve.odict.values()]
+    min_length = [max(1, min(np.max(np.diff(lc.x)), 0.5*(rng.max()-rng.min()))) for lc in curve.odict.values()]
     x_for_peak_search = np.linspace(curve.X[:, 1].min(), curve.X[:, 1].max(), 101)
     # add_x = np.array([curve.X[:, 1].min() + rng.min(), curve.X[:, 1].max() + rng.max()])
     # add_y = np.zeros_like(add_x)
