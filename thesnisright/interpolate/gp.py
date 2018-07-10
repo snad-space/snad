@@ -65,20 +65,21 @@ class GPInterpolator(object):
                 {}'''.format(pformat(self.regressor.kernel_.get_params()))
             )
 
-
     def __call__(self, x, compute_err=True):
         """Produce median and std of GP realizations
 
         Parameters
         ----------
-        x: array-like, shape = (n,)
+        x: array-like, shape = (n,) or (n, 2)
         compute_err: bool, optional
 
         Returns
         -------
         MultiStateData
         """
-        x_ = self.msd.sample(x)
+        x_ = x
+        if x.ndim == 1:
+            x_ = self.msd.sample(x_)
         if compute_err:
             y, err = self.regressor.predict(x_, return_std=True)
         else:
