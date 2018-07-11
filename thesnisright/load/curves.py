@@ -580,6 +580,10 @@ class OSCCurve(SNCurve):
 
                 band_curve = d.setdefault(dot['band'], [])
 
+                time = dot['time']
+                if isinstance(time, list):
+                    time = np.mean([float(t) for t in time])
+
                 if 'e_time' in dot:
                     e_time = float(dot['e_time'])
                     if e_time < 0 or not np.isfinite(e_time):
@@ -617,7 +621,7 @@ class OSCCurve(SNCurve):
                     e_flux = np.nan
 
                 band_curve.append((
-                    dot['time'],
+                    time,
                     e_time,
                     flux,
                     e_flux,

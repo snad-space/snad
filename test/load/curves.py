@@ -66,6 +66,12 @@ class AddPhotometryDotTestCase(unittest.TestCase):
             self.assertIn(x[1], msd.arrays.x[:, 1])
 
 
+class TwoValuedTimeFieldTestCase(unittest.TestCase):
+    def test_read(self):
+        for tde in TDE_PHOTOMETRY_WITH_TWO_VALUED_TIME:
+            OSCCurve.from_name(tde, down_args={'baseurl':TDE_URL})
+
+
 class SetErrorsTestCase(unittest.TestCase):
     def setUp(self):
         self.curves = _get_curves(SNS_HAVE_NOT_MAGN_ERRORS)

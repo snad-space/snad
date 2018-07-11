@@ -52,3 +52,9 @@ SNS_HAVE_B_BAND = frozenset((
 SNS_ALL = frozenset.union(SNS_NO_CMAIMED_TYPE, SNS_UPPER_LIMIT, SNS_E_LOWER_UPPER_MAGNITUDE, SNE_E_TIME,
                           SNS_UNORDERED_PHOTOMETRY, SNS_HAVE_ZERO_E_MAGNITUDE, SNS_HAVE_B_BAND)
 SNS_ALL_TUPLE = tuple(sorted(SNS_ALL))
+
+TDE_URL = 'http://snad.sai.msu.ru/tde/'
+
+TDE_PHOTOMETRY_WITH_TWO_VALUED_TIME = frozenset((
+    'iPTF16fnl',
+))
