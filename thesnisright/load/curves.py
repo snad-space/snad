@@ -579,6 +579,10 @@ class OSCCurve(SNCurve):
                 if 'realization' in dot or 'model' in dot:
                     continue
 
+                # Observation of host, not target object
+                if 'host' in dot:
+                    continue
+
                 if (bands is not None) and (dot.get('band') not in bands_set):
                     continue
 
