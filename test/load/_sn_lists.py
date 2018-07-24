@@ -16,9 +16,8 @@ SNE_E_TIME = frozenset((
     'MLS121209:093512+152855',
 ))
 
+# No known examples
 SNS_UNORDERED_PHOTOMETRY = frozenset((
-    'PTF09atu',
-    'PS1-10ahf',
 ))
 
 SNS_HAVE_ZERO_E_MAGNITUDE = frozenset((

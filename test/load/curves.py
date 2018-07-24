@@ -238,6 +238,7 @@ class HasSpectraTestCase(unittest.TestCase):
             self.assertFalse(curve.has_spectra, '{} data should not contain spectra'.format(curve.name))
 
 
+@unittest.skip('No known examples of unordered data')
 class TemporalOrderTestCase(unittest.TestCase):
     def setUp(self):
         self.sn_files = SNFiles(SNS_UNORDERED_PHOTOMETRY)
