@@ -26,6 +26,20 @@ def _get_curves(sns, *args, **kwargs):
     return [OSCCurve.from_name(sn, *args, **kwargs) for sn in sns]
 
 
+def _remove_photometry_fields(j, fields):
+    dots_count = 0
+    for dot in j['photometry']:
+        if 'time' not in dot or 'band' not in dot:
+            continue
+        some_fields_removed = False
+        for field in fields:
+            if field in dot:
+                dot.pop(field)
+                some_fields_removed = True
+        dots_count += some_fields_removed
+    return dots_count
+
+
 class ReadLightCurvesFromJsonTestCase(unittest.TestCase):
     def setUp(self):
         self.sn_files = SNFiles(SNS_ALL)
@@ -64,6 +78,12 @@ class AddPhotometryDotTestCase(unittest.TestCase):
             self.assertIn(0, msd.odict[self.band].err)
             self.assertIn(x[0], msd.arrays.x[:, 1])
             self.assertIn(x[1], msd.arrays.x[:, 1])
+
+
+class TwoValuedTimeFieldTestCase(unittest.TestCase):
+    def test_read(self):
+        for tde in TDE_PHOTOMETRY_WITH_TWO_VALUED_TIME:
+            OSCCurve.from_name(tde, down_args={'baseurl':TDE_URL})
 
 
 class SetErrorsTestCase(unittest.TestCase):
@@ -117,6 +137,40 @@ class BandDataTestCase(unittest.TestCase):
         sn = SNS_ALL_TUPLE[0]
         with self.assertRaises(ValueError):
             OSCCurve.from_name(sn, bands=band)
+
+
+class RemoveModelDataTestCase(unittest.TestCase):
+    def test_model_data_removed(self):
+        sns = tuple(SNS_HAVE_MODEL_DATA)
+        sn_files = SNFiles(sns)
+        for i, file_path in enumerate(sn_files.filepaths):
+            sn = sns[i]
+            with open(file_path) as f:
+                j = json.load(f)[sn]
+            model_dots_count = _remove_photometry_fields(j, ('model', 'realization'))
+            curve_w_model = OSCCurve(j)
+            all_dots_count = len(curve_w_model.y)
+            curve_wo_model = OSCCurve.from_json(file_path)
+            normal_dots_count = len(curve_wo_model.y)
+            self.assertLessEqual(normal_dots_count, all_dots_count - model_dots_count)
+            self.assertLess(normal_dots_count, all_dots_count)
+
+
+class RemoveHostObservationsTestCase(unittest.TestCase):
+    def test_host_observations_removed(self):
+        sns = tuple(SNS_HAVE_HOST_OBSERVATIONS)
+        sn_files = SNFiles(sns)
+        for i, file_path in enumerate(sn_files.filepaths):
+            sn = sns[i]
+            with open(file_path) as f:
+                j = json.load(f)[sn]
+            host_dots_count = _remove_photometry_fields(j, ('host',))
+            curve_w_host = OSCCurve(j)
+            all_dots_count = len(curve_w_host.y)
+            curve_wo_host = OSCCurve.from_json(file_path)
+            normal_dots_count = len(curve_wo_host.y)
+            self.assertLessEqual(normal_dots_count, all_dots_count - host_dots_count)
+            self.assertLess(normal_dots_count, all_dots_count)
 
 
 class UpperLimitTestCase(unittest.TestCase):
@@ -184,6 +238,7 @@ class HasSpectraTestCase(unittest.TestCase):
             self.assertFalse(curve.has_spectra, '{} data should not contain spectra'.format(curve.name))
 
 
+@unittest.skip('No known examples of unordered data')
 class TemporalOrderTestCase(unittest.TestCase):
     def setUp(self):
         self.sn_files = SNFiles(SNS_UNORDERED_PHOTOMETRY)

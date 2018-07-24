@@ -575,10 +575,22 @@ class OSCCurve(SNCurve):
             raise NoPhotometryError(name)
         for dot in self._json['photometry']:
             if 'time' in dot and 'band' in dot:
+                # Model data, not real observation
+                if 'realization' in dot or 'model' in dot:
+                    continue
+
+                # Observation of host, not target object
+                if 'host' in dot:
+                    continue
+
                 if (bands is not None) and (dot.get('band') not in bands_set):
                     continue
 
                 band_curve = d.setdefault(dot['band'], [])
+
+                time = dot['time']
+                if isinstance(time, list):
+                    time = np.mean([float(t) for t in time])
 
                 if 'e_time' in dot:
                     e_time = float(dot['e_time'])
@@ -617,7 +629,7 @@ class OSCCurve(SNCurve):
                     e_flux = np.nan
 
                 band_curve.append((
-                    dot['time'],
+                    time,
                     e_time,
                     flux,
                     e_flux,

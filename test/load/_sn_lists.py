@@ -16,9 +16,8 @@ SNE_E_TIME = frozenset((
     'MLS121209:093512+152855',
 ))
 
+# No known examples
 SNS_UNORDERED_PHOTOMETRY = frozenset((
-    'PTF09atu',
-    'PS1-10ahf',
 ))
 
 SNS_HAVE_ZERO_E_MAGNITUDE = frozenset((
@@ -49,6 +48,21 @@ SNS_HAVE_B_BAND = frozenset((
     'SN1993A',
 ))
 
+SNS_HAVE_MODEL_DATA = frozenset((
+    'SN2011kf',
+    'PTF09atu',
+))
+
+SNS_HAVE_HOST_OBSERVATIONS = frozenset((
+    'iPTF13ajg',
+))
+
 SNS_ALL = frozenset.union(SNS_NO_CMAIMED_TYPE, SNS_UPPER_LIMIT, SNS_E_LOWER_UPPER_MAGNITUDE, SNE_E_TIME,
                           SNS_UNORDERED_PHOTOMETRY, SNS_HAVE_ZERO_E_MAGNITUDE, SNS_HAVE_B_BAND)
 SNS_ALL_TUPLE = tuple(sorted(SNS_ALL))
+
+TDE_URL = 'http://snad.sai.msu.ru/tde/'
+
+TDE_PHOTOMETRY_WITH_TWO_VALUED_TIME = frozenset((
+    'iPTF16fnl',
+))
