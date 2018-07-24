@@ -575,6 +575,10 @@ class OSCCurve(SNCurve):
             raise NoPhotometryError(name)
         for dot in self._json['photometry']:
             if 'time' in dot and 'band' in dot:
+                # Model data, not real observation
+                if 'realization' in dot or 'model' in dot:
+                    continue
+
                 if (bands is not None) and (dot.get('band') not in bands_set):
                     continue
 

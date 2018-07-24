@@ -125,6 +125,33 @@ class BandDataTestCase(unittest.TestCase):
             OSCCurve.from_name(sn, bands=band)
 
 
+class RemoveModelDataTestCase(unittest.TestCase):
+    @staticmethod
+    def replace_model_dots_with_normal(j):
+        phot = j['photometry']
+        model_dots_count = 0
+        for dot in phot:
+            model = dot.pop('model', None)
+            realization = dot.pop('realization', None)
+            model_dots_count += model is None or realization is None
+        return model_dots_count
+
+    def test_model_data_removed(self):
+        sns = tuple(SNS_HAVE_MODEL_DATA)
+        sn_files = SNFiles(sns)
+        for i, file_path in enumerate(sn_files.filepaths):
+            sn = sns[i]
+            with open(file_path) as f:
+                j = json.load(f)[sn]
+            model_dots_count = self.replace_model_dots_with_normal(j)
+            curve_w_model = OSCCurve(j)
+            all_dots_count = len(curve_w_model.y)
+            curve_wo_model = OSCCurve.from_json(file_path)
+            normal_dots_count = len(curve_wo_model.y)
+            self.assertLessEqual(normal_dots_count, all_dots_count - model_dots_count)
+            self.assertLess(normal_dots_count, all_dots_count)
+
+
 class UpperLimitTestCase(unittest.TestCase):
     def setUp(self):
         self.curves = _get_curves(SNS_UPPER_LIMIT)
