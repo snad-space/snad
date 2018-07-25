@@ -53,31 +53,28 @@ class AddPhotometryDotTestCase(unittest.TestCase):
     def setUp(self):
         self.band = 'B'
         self.curves = _get_curves(SNS_HAVE_B_BAND, bands=self.band)
+        self.x = np.array([-100])
+        self.y = np.array([123])
+        self.err = np.array([1.23])
+
+    def check_dot_in_msd(self, msd):
+        self.assertIn(self.x, msd.odict[self.band].x)
+        self.assertIn(self.y, msd.odict[self.band].y)
+        self.assertIn(self.err, msd.odict[self.band].err)
+        self.assertIn(self.x, msd.arrays.x[:, 1])
 
     def test_add_dot_to_msd(self):
-        x = np.array([-100])
-        y = np.array([123])
-        err = np.array([1.23])
-        dot = np.rec.array([x, y, err], names=('x', 'y', 'err'))
+        dot = np.rec.array([self.x, self.y, self.err], names=('x', 'y', 'err'))
         dots = {'B': dot}
         for curve in self.curves:
             msd = curve.multi_state_data()
             msd.append_dict(dots)
-            self.assertIn(x, msd.odict[self.band].x)
-            self.assertIn(y, msd.odict[self.band].y)
-            self.assertIn(err, msd.odict[self.band].err)
-            self.assertIn(x, msd.arrays.x[:,1])
+            self.check_dot_in_msd(msd)
 
-    def test_msd_with_zero_dots(self):
+    def test_add_dots(self):
         for curve in self.curves:
-            x = np.array([0, 1])
-            msd = curve.msd_with_zero_valued_dots(x)
-            self.assertIn(x[0], msd.odict[self.band].x)
-            self.assertIn(x[1], msd.odict[self.band].x)
-            self.assertIn(0, msd.odict[self.band].y)
-            self.assertIn(0, msd.odict[self.band].err)
-            self.assertIn(x[0], msd.arrays.x[:, 1])
-            self.assertIn(x[1], msd.arrays.x[:, 1])
+            curve = curve.add_dots(self.x, self.y, self.err)
+            self.check_dot_in_msd(curve)
 
 
 class TwoValuedTimeFieldTestCase(unittest.TestCase):

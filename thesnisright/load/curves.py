@@ -308,23 +308,11 @@ class SNCurve(MultiStateData):
         """Copy photometry data as MultiStateData"""
         return MultiStateData.from_state_data(self.odict)
 
-    def msd_with_zero_valued_dots(self, x):
-        """Data with dots with given x and zero y and err for all bands
-
-        Parameters
-        ----------
-        x: array-like, shape=(n, )
-
-        Returns
-        -------
-        MultiStateData
-        """
+    def add_dots(self, x, y, err):
         msd = self.multi_state_data()
-        y = np.zeros_like(x)
-        err = np.zeros_like(x)
         dots = {band: np.rec.array([x, y, err], names=('x', 'y', 'err')) for band in self.bands}
         msd.append_dict(dots)
-        return msd
+        return self.convert_msd(msd, is_filtered=self.is_filtered, is_binned=False)
 
     def set_error(self, absolute=0, rel=0):
         """Return new SNCurve with set errors for dots without them
@@ -359,6 +347,7 @@ class SNCurve(MultiStateData):
                        additional_attrs=self.__additional_attrs)
 
     def transform_upper_limit_to_normal(self, intervals=((-np.inf, None), (None, np.inf)),
+                                        y_factor=0.5, err_factor=1,
                                         inf_err_is_norm=False, return_upper_limit=False):
         """New SNCurve object with upper limits converted to normal points
 
@@ -370,6 +359,10 @@ class SNCurve(MultiStateData):
             observation, and `None` on the last position indicates the earliest
             normal observation. The default is too take upper limits out of
             the range of normal observation data
+        y_factor: float, optional
+            New value of `y` is its old value multiply `y_factor`
+        err_factor: float, optional
+            New value of `err` is `y`'s old value multiply `err_factor`
         inf_err_is_norm: bool, optional
             Should be dot without error described as normal, when `None` is
             used in `intervals`
@@ -406,8 +399,8 @@ class SNCurve(MultiStateData):
             lc = lc.copy()
             ul_idx = (reduce(lambda prev, interval: prev | is_between(lc.x, interval), intervals, False)
                       & lc.isupperlimit)
-            lc.err[ul_idx] = lc[ul_idx].y
-            lc.y[ul_idx] = 0.5 * lc[ul_idx].err
+            lc.err[ul_idx] = err_factor * lc.y[ul_idx]
+            lc.y[ul_idx] *= y_factor
             lc.isupperlimit[ul_idx] = False
             upper_limits[band] = lc[ul_idx]
             new_dict[band] = lc
@@ -529,8 +522,6 @@ class OSCCurve(SNCurve):
     ----------
     name: string
         SN name.
-    claimed_type: string or None
-        SN claimed type, None if no claimed type is specified
     bands: frozenset of strings
         Photometric bands that are appeared in `photometry`.
     has_spectra: bool
