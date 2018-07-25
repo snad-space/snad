@@ -209,6 +209,7 @@ def results_to_table(results, old_table, bands, rng):
     deriv = pandas.DataFrame(index=df.index, columns=['deriv_{}'.format(band) for band in bands])
     weight_deriv = pandas.DataFrame(index=df.index, columns=['weight_deriv_{}'.format(band) for band in bands])
     logl = pandas.Series(index=df.index, name='log_likehood')
+    theta = pandas.DataFrame(index=df.index, columns=['theta_{}'.format(i) for i in range(9)])
     curves = pandas.DataFrame(index=df.index,
                               columns=['{}{:+03d}'.format(band[0], int(t)) for band in bands for t in rng],
                               dtype=float)
@@ -222,9 +223,10 @@ def results_to_table(results, old_table, bands, rng):
             weight_deriv.iloc[i][j] = np.sum(np.square(msd.odict[band].y - obs_approx.odict[band].y)
                                              / msd.odict[band].err)
         logl[i] = interpolator.regressor.log_marginal_likelihood()
+        theta.iloc[i] = interpolator.regressor.kernel_.theta
         curves.iloc[i] = np.hstack(interp_msd.odict[band].y for band in bands)
 
-    df = pandas.concat((df, deriv, weight_deriv, logl, curves), axis=1)
+    df = pandas.concat((df, deriv, weight_deriv, logl, theta, curves), axis=1)
     csv_name = 'extrapol_{}_{}_{}.csv'.format(rng.min(), rng.max(), ','.join(b.replace("'", '_pr') for b in bands))
     df.to_csv(os.path.join(DATA_ROOT, csv_name), sep=',', index=False)
 
