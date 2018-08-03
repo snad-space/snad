@@ -1,7 +1,6 @@
 import pylab as plt
 import numpy as np
 import os
-import seaborn
 
 from sklearn.ensemble import IsolationForest
 from collections import Counter
@@ -30,7 +29,7 @@ data_all = {}
 
 for k in range(2, 10):
     # path to lc fitted data files
-    path_to_data = '../../data/tsne/tsne_pr_' + str(k) + '.csv'
+    path_to_data = '../../data/tsne/tsne.' + str(k) + '.csv'
 
     print('\n ****    t-SNE nalysis with ', str(k),' parameters    **** \n')
     print('Reading data ...')
@@ -41,10 +40,10 @@ for k in range(2, 10):
     op1.close()
 
     data_str1 = [elem.split(',') for elem in lin1]
-    data = [[float(item) for item in line[2:]] for line in data_str1[1:]]
+    data = [[float(item) for item in line[1:]] for line in data_str1[1:]]
 
     #  gather names in the correct order
-    names = [line[1] for line in data_str1[1:]]
+    names = [line[0] for line in data_str1[1:]]
 
     # remove problematic objects
     for item in skip:
@@ -111,6 +110,10 @@ for (c,it) in indx_groups:
     print('Anomalies common for {} cases ({} total):'.format(c, len(itl)))
     for x in itl:
         print('    {}'.format(names[x[0]]))
+
+    f = open('weirdSN_isoforest_tSNE_common_' + str(c) + '.dat', 'w')
+    f.write("\n".join([names[x[0]] for x in itl]));
+    f.close()
 
 #print('\n There are ', str(len(indx_all)), ' common anomalies.')
 #print([names[item] for item in indx_all])

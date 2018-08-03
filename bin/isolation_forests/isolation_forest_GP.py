@@ -1,5 +1,6 @@
 import pylab as plt
 import numpy as np
+import pandas as pd
 import os
 
 from sklearn.ensemble import IsolationForest
@@ -9,8 +10,10 @@ from sklearn.ensemble import IsolationForest
 ########################################################
 
 # path to lc fitted data files
-path_to_data = '../../data/gri_renorm.csv'
-path_to_data_pr = '../../data/gri_pr_renorm.csv'
+inp_files = [
+    '../../data/extrapol_-20.0_100.0_g_pr,r_pr,i_pr.csv',
+    '../../data/extrapol_-20.0_100.0_g,r,i.csv'
+]
 
 ######## user choices
 # set random seed
@@ -23,25 +26,14 @@ plot = 'summary'
 print('\n ****    Full interpolate LC analysis    **** \n')
 print('Reading data ...')
 
-# read data for gri filters
-op1 = open(path_to_data, 'r')
-lin1 = op1.readlines()
-op1.close()
+dfs = [pd.read_csv(inp) for inp in inp_files]
+lcs = [np.array(df.loc[:,'g-20':'i+100']) for df in dfs]
+lc_data = np.concatenate(lcs, axis=0)
+lc_data_norm = np.amax(lc_data, axis=1).reshape(-1,1)
+lc_norm = np.hstack([lc_data / lc_data_norm, -2.5*np.log10(lc_data_norm)])
 
-data_str1 = [elem.split(',') for elem in lin1]
-data_lc1 = [[float(item) for item in line[9:]] for line in data_str1[1:]]
-
-# read data for g'r'i' filters
-op1b = open(path_to_data_pr, 'r')
-lin1b = op1b.readlines()
-op1b.close()
-
-data_str2 = [elem.split(',') for elem in lin1b]
-data_lc2 = [[float(item) for item in line[9:]] for line in data_str2[1:]]
-
-# join lc and gather names in the correct order
-lc_norm = np.array(data_lc1 + data_lc2)
-lc_names = [line[0] for line in data_str1[1:]] + [line[0] for line in data_str2[1:]]
+names = [np.array(df.loc[:,'Name']) for df in dfs]
+lc_names = np.concatenate(names, axis=0)
 
 print('   ... done!')
 
@@ -88,40 +80,13 @@ if plot == True:
 print('\n ****    Analysis based on GP parameters    **** \n')
 print('Reading data ...')
 
-# path to data
-path_to_param = '../../theta.csv'
-path_to_param2 = '../../theta_pr.csv'
+thetas = [np.array(df.loc[:,'log_likehood':'theta_8']) for df in dfs]
+theta_data = np.concatenate(thetas, axis=0)
+theta_data_norm = np.amax(theta_data, axis=0) - np.amin(theta_data, axis=0)
+param_norm = theta_data / theta_data_norm
 
-# read data for gri filters
-op2 = open(path_to_param, 'r')
-lin2 = op2.readlines()
-op2.close()
-
-param_str1 = [elem.split(',') for elem in lin2]
-param1 = [[float(line[i]) for i in range(2, len(line))] for line in param_str1[1:]]
-
-# read data for g'r'i' filters
-op3 = open(path_to_param2, 'r')
-lin3 = op3.readlines()
-op3.close()
-
-param_str2 = [elem.split(',') for elem in lin3]
-param2 = [[float(line[i]) for i in range(2, len(line))] for line in param_str2[1:]]
-
-print('   ... done!')
-print('Normalizing light curves ...')
-
-# join lc and gather names in the correct order
-param = np.array(param1 + param2)
-param_names = [line[1] for line in param_str1[1:]] + [line[1] for line in param_str2[1:]]
-
-# check if order of names is the same as in the light curve files
-check_names = [lc_names[i] == param_names[i] for i in range(param.shape[0])]
-if False in check_names:
-    raise NameError('List of names in parameter files does not correspond to light curve files!')
-
-# normalize parameters
-param_norm = np.array([[param[i][j]/(max(param[:,j]) - min(param[:,j])) for j in np.arange(param.shape[1])] for i in np.arange(param.shape[0])])
+names = [np.array(df.loc[:,'Name']) for df in dfs]
+param_names = np.concatenate(names, axis=0)
 
 print('   ... done!')
 
@@ -185,9 +150,9 @@ if plot == 'summary' or plot:
 
     for k in range(len(indx_out)):
         plt.figure()
-        plt.scatter(np.arange(150), lc_norm[indx_out[k]][3:153], s=2.0, label='g')
-        plt.scatter(np.arange(150), lc_norm[indx_out[k]][153:303], s=2.0, label='r')
-        plt.scatter(np.arange(150), lc_norm[indx_out[k]][303:453], s=2.0, label='i')
+        plt.scatter(np.arange(121), lc_norm[indx_out[k], 0:121], s=2.0, label='g')
+        plt.scatter(np.arange(121), lc_norm[indx_out[k], 122:243], s=2.0, label='r')
+        plt.scatter(np.arange(121), lc_norm[indx_out[k], 243:364], s=2.0, label='i')
         plt.legend()
         plt.savefig('anomalies/' + lc_names[indx_out[k]] + '_isoforest.png')
 
