@@ -2,6 +2,7 @@
 
 import os
 import shutil
+import sys
 
 import pandas
 
@@ -16,9 +17,14 @@ def add_sufix(path, sufix='_uncut'):
 
 
 if __name__ == '__main__':
-    for bands in ('g,r,i', 'g_pr,r_pr,i_pr'):
-        table_path = os.path.join(PROJECT_ROOT, 'data/extrapol_-20.0_100.0_{}.csv'.format(bands))
-        fig_dir_path = os.path.join(PROJECT_ROOT, 'fig/{}'.format(bands))
+    band_sets = ('B,R,I', 'g,r,i', "g',r',i'",)
+    if len(sys.argv) > 1:
+        band_sets = sys.argv[1:]
+
+    for bands in band_sets:
+        basename = 'extrapol_-20.0_100.0_' + bands.replace("'", '_pr')
+        table_path = os.path.join(PROJECT_ROOT, 'data/{}.csv'.format(basename))
+        fig_dir_path = os.path.join(PROJECT_ROOT, 'fig/{}'.format(basename))
 
         df = pandas.read_csv(table_path, sep=',')
         ext = '.png'
