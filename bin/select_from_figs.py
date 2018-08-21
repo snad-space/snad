@@ -32,4 +32,4 @@ if __name__ == '__main__':
         new_df = df[df.Name.isin(sne_from_figs)]
 
         shutil.move(table_path, add_sufix(table_path))
-        new_df.to_csv(table_path, sep=',')
+        new_df.to_csv(table_path, sep=',', index=False)
