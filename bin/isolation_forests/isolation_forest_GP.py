@@ -12,7 +12,8 @@ from sklearn.ensemble import IsolationForest
 # path to lc fitted data files
 inp_files = [
     '../../data/extrapol_-20.0_100.0_g_pr,r_pr,i_pr.csv',
-    '../../data/extrapol_-20.0_100.0_g,r,i.csv'
+    '../../data/extrapol_-20.0_100.0_g,r,i.csv',
+    '../../data/extrapol_-20.0_100.0_B,R,I.csv'
 ]
 
 ######## user choices
