@@ -18,7 +18,8 @@ dim = int(dim)
 
 inp_files = [
 	'../data/extrapol_-20.0_100.0_g_pr,r_pr,i_pr.csv',
-	'../data/extrapol_-20.0_100.0_g,r,i.csv'
+	'../data/extrapol_-20.0_100.0_g,r,i.csv',
+	'../data/extrapol_-20.0_100.0_B,R,I.csv'
 ]
 
 dfs = [pd.read_csv(inp) for inp in inp_files]

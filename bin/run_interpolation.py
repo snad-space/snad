@@ -8,7 +8,7 @@ import numpy as np
 from multistate_kernel.util import MultiStateData
 from sklearn.gaussian_process import kernels
 
-from thesnisright import OSCCurve, BazinFitter, SNFiles
+from thesnisright import OSCCurve, BazinFitter, SNFiles, transform_bands_msd
 from thesnisright.interpolate.gp import GPInterpolator
 
 
@@ -16,7 +16,9 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(__file__))
 DATA_ROOT = os.path.join(PROJECT_ROOT, 'data')
 FIG_ROOT = os.path.join(PROJECT_ROOT, 'fig')
 SNE_PATH = os.path.join(PROJECT_ROOT, 'sne')
-COLORS = {'g': 'g', 'r': 'r', 'i': 'brown', "g'": 'g', "r'": 'r', "i'": 'brown'}
+COLORS = {'B': 'b', 'R': 'deeppink', 'I': 'olive',
+          'g': 'g', 'r': 'r', 'i': 'brown',
+          "g'": 'g', "r'": 'r', "i'": 'brown',}
 
 
 def _preprocess_curve(curve, peak_band, rng_width, y_ul_factor):
@@ -105,15 +107,13 @@ def _zero_negative_fluxes(msd, x_peak):
     return msd
 
 
-def _plot(fig_dir, orig_curve, interpolator, msd, msd_bazin=None, msd_plus_bazin=None):
+def _plot(fig_dir, orig_curve, interpolator, msd, msd_bazin=None, msd_plus_bazin=None, msd_transformed=None):
     import matplotlib; matplotlib.use('Agg')
     import matplotlib.pyplot as plt
     plt.clf()
-    if msd_bazin is not None:
-        fig, ax_ = plt.subplots(2, 3, figsize=(10, 6), sharex=True)
-    else:
-        fig, ax_ = plt.subplots(1, 3, figsize=(10, 4), sharex=True)
-        ax_ = np.atleast_2d(ax_)
+    vsize = 1 + int(msd_bazin is not None) + int(msd_transformed is not None)
+    fig, ax_ = plt.subplots(vsize, 3, figsize=(10, 4*vsize), sharex=True)
+    ax_ = np.atleast_2d(ax_)
     for i, band in enumerate(bands):
         plt.sca(ax_[0, i])
         if i == 1:
@@ -154,12 +154,21 @@ def _plot(fig_dir, orig_curve, interpolator, msd, msd_bazin=None, msd_plus_bazin
                              color='grey', alpha=0.2)
             plt.grid()
             plt.legend()
+
+    if msd_transformed is not None:
+        for i, (band, lc) in enumerate(msd_transformed.odict.items()):
+            plt.sca(ax_[vsize-1, i])
+            plt.plot(lc.x, lc.y, color=COLORS[band], label=band)
+            plt.grid()
+            plt.legend()
+
     fig_path = os.path.join(fig_dir, '{}.png'.format(orig_curve.name))
     print(fig_path)
     plt.savefig(fig_path)
 
 
-def interpolate(sn, bands, peak_band, rng=np.linspace(-50, 100, 151), fig_dir='.', plot=True, with_bazin=True):
+def interpolate(sn, bands, peak_band, rng=np.linspace(-50, 100, 151), fig_dir='.',
+                plot=True, with_bazin=True, transform=None):
     rng_width = rng.max() - rng.min()
 
     orig_curve = OSCCurve.from_json(sn, bands=bands)
@@ -194,15 +203,24 @@ def interpolate(sn, bands, peak_band, rng=np.linspace(-50, 100, 151), fig_dir='.
 
     msd = _zero_negative_fluxes(msd, x_peak)
 
-    if plot:
-        _plot(fig_dir, orig_curve, interpolator, msd, msd_bazin, msd_plus_bazin)
+    msd_transformed = None
+    if transform is not None:
+        if with_bazin:
+            msd_transformed = transform_bands_msd(msd_plus_bazin, transform, fill_value=0)
+        else:
+            msd_transformed = transform_bands_msd(msd, transform, fill_value=0)
 
+    if plot:
+        _plot(fig_dir, orig_curve, interpolator, msd, msd_bazin, msd_plus_bazin, msd_transformed)
+
+    if transform:
+        return interpolator, msd_transformed
     if with_bazin:
         return interpolator, msd_plus_bazin
     return interpolator, msd
 
 
-def results_to_table(results, old_table, bands, rng):
+def results_to_table(results, old_table, bands, table_bands, rng):
     import pandas
 
     df = pandas.read_csv(old_table, sep=',')
@@ -211,7 +229,7 @@ def results_to_table(results, old_table, bands, rng):
     logl = pandas.Series(index=df.index, name='log_likehood')
     theta = pandas.DataFrame(index=df.index, columns=['theta_{}'.format(i) for i in range(9)])
     curves = pandas.DataFrame(index=df.index,
-                              columns=['{}{:+03d}'.format(band[0], int(t)) for band in bands for t in rng],
+                              columns=['{}{:+03d}'.format(band[0], int(t)) for band in table_bands for t in rng],
                               dtype=float)
 
     for i, (interpolator, interp_msd) in enumerate(results):
@@ -224,7 +242,7 @@ def results_to_table(results, old_table, bands, rng):
                                              / msd.odict[band].err)
         logl[i] = interpolator.regressor.log_marginal_likelihood()
         theta.iloc[i] = interpolator.regressor.kernel_.theta
-        curves.iloc[i] = np.hstack(interp_msd.odict[band].y for band in bands)
+        curves.iloc[i] = np.hstack(interp_msd.odict[band].y for band in table_bands)
 
     df = pandas.concat((df, deriv, weight_deriv, logl, theta, curves), axis=1)
     csv_name = 'extrapol_{}_{}_{}.csv'.format(rng.min(), rng.max(), ','.join(b.replace("'", '_pr') for b in bands))
@@ -233,21 +251,32 @@ def results_to_table(results, old_table, bands, rng):
 
 if __name__ == '__main__':
     import os
+    import sys
     import multiprocessing
     from functools import partial
+    from thesnisright import BRI_to_gri
+
+    band_sets = ('B,R,I', 'g,r,i', "g',r',i'",)
+    if len(sys.argv) > 1:
+        band_sets = sys.argv[1:]
 
     rng = np.r_[-20:100:121j]
 
-    for bands in ('g,r,i', "g',r',i'"):
+    for bands in band_sets:
         bands = bands.split(',')
         basename = ','.join(band.replace("'", '_pr') for band in bands)
         sne_csv = os.path.join(DATA_ROOT, 'min3obs_{}.csv'.format(basename))
         sn_files = SNFiles(sne_csv, update=False, path=SNE_PATH)
         fig_dir = os.path.join(FIG_ROOT, basename)
         os.makedirs(fig_dir, exist_ok=True)
+        transform = None
+        table_bands = bands
+        if set(bands) == {'B', 'R', 'I'}:
+            transform = BRI_to_gri
+            table_bands = ('g', 'r', 'i')
         interp = partial(interpolate,
                          rng=rng, bands=bands, peak_band=bands[1],
-                         fig_dir=fig_dir, plot=True, with_bazin=False)
+                         fig_dir=fig_dir, plot=True, with_bazin=False, transform=transform)
         with multiprocessing.Pool() as p:
             results = p.map(interp, sn_files.filepaths)
-        results_to_table(results, sne_csv, bands, rng)
+        results_to_table(results, sne_csv, bands, table_bands, rng)
