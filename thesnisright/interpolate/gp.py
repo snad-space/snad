@@ -4,7 +4,7 @@ from pprint import pformat
 import numpy as np
 from multistate_kernel import MultiStateKernel
 from scipy import optimize
-from sklearn.gaussian_process import GaussianProcessRegressor
+from sklearn.gaussian_process import GaussianProcessRegressor, kernels
 
 
 def _tri_matrix_to_flat(matrix):
@@ -150,3 +150,84 @@ class GPInterpolator(object):
             if np.any(np.abs(value - lower_upper) < atol):
                 return True
         return False
+
+    @staticmethod
+    def default_initial_kernels(curve, kernel=kernels.RBF, min_length_limits=(0, np.inf)):
+        """A variant of default kernels
+
+        Parameters
+        ----------
+        curve: MultiStateData
+            Light curves to use
+        kernel: sklearn.gaussian_process.kernels.Kernel
+            Kernel to use, default is RBF, should support `length_scale_bounds`
+            keyword argument
+        min_length_limits: (float, float), optional
+            Minimum value of kernel length is set to maximum step between
+            neighbour observations. This value clamps the minimum length to
+            provided interval. Good choice for RBF kernel is
+            `(bin_size, 0.5*approximation_range)`
+
+        Returns
+        -------
+        Tuple[sklearn.gaussian_process.kernels.Kernel]
+        """
+        diff_ = (np.max(np.diff(lc.x)) if lc.x.size > 1 else 0 for lc in curve.odict.values())
+        min_length_ = [max(min_length_limits[0], min(diff, min_length_limits[1])) for diff in diff_]
+        kernels_ = tuple(kernel(length_scale_bounds=(min_length, 1e4)) for min_length in min_length_)
+        return kernels_
+
+    @staticmethod
+    def default_constant_matrix(n):
+        """A variant of initial constant matrix and its bounds
+
+        Parameters
+        ----------
+        n: int
+            Matrix dimension
+
+        Returns
+        -------
+        initial_constant_matrix: array, shape = (n_kernels, n_kernels)
+        constant_matrix_bounds: (array, array), shape = (n_kernels, n_kernels)
+
+        Examples
+        --------
+        For `n = 1`:
+        >>> from thesnisright import GPInterpolator
+        >>> m, m_bounds = GPInterpolator.default_constant_matrix(1)
+        >>> print(m)
+        [[1.]]
+        >>> print(m_bounds)
+        (array([[0.0001]]), array([[10000.]]))
+
+        For `n = 3`:
+
+        >>> from thesnisright import GPInterpolator
+        >>> m, m_bounds = GPInterpolator.default_constant_matrix(3)
+        >>> print(m)
+        [[1.  0.  0. ]
+         [0.5 1.  0. ]
+         [0.5 0.5 1. ]]
+        >>> print(m_bounds[0])
+        [[ 1.e-04  0.e+00  0.e+00]
+         [-1.e+03 -1.e+03  0.e+00]
+         [-1.e+03 -1.e+03 -1.e+03]]
+        >>> print(m_bounds[1])
+        [[10000.     0.     0.]
+         [ 1000.  1000.     0.]
+         [ 1000.  1000.  1000.]]
+
+        """
+        m = np.eye(n)
+        m[np.tril_indices_from(m, -1)] = 0.5
+
+        m_lower_bound = np.zeros_like(m)
+        m_lower_bound[np.tril_indices_from(m_lower_bound)] = -1e3
+        m_lower_bound[0, 0] = 1e-4
+
+        m_upper_bound = np.zeros_like(m)
+        m_upper_bound[np.tril_indices_from(m_upper_bound)] = 1e3
+        m_upper_bound[0, 0] = 1e4
+
+        return m, (m_lower_bound, m_upper_bound)

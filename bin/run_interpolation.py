@@ -6,10 +6,10 @@ from copy import deepcopy
 
 import numpy as np
 from multistate_kernel.util import MultiStateData
-from sklearn.gaussian_process import kernels
 
 from thesnisright import OSCCurve, BazinFitter, SNFiles, transform_bands_msd
 from thesnisright.interpolate.gp import GPInterpolator
+from thesnisright.process.util import preprocess_curve_default, zero_negative_fluxes
 
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(__file__))
@@ -21,55 +21,6 @@ COLORS = {'B': 'b', 'R': 'deeppink', 'I': 'olive',
           "g'": 'g', "r'": 'r', "i'": 'brown',}
 
 
-def _preprocess_curve(curve, peak_band, rng_width, y_ul_factor):
-    curve = curve.binned(bin_width=1, discrete_time=True)
-    # curve = curve.set_error(rel=0.1)
-    wo_ul_curve = curve.filtered(sort='filtered')
-    curve = curve.transform_upper_limit_to_normal(y_factor=y_ul_factor, err_factor=3)
-    curve = curve.filtered(sort='filtered')
-
-    x_peak_approx = wo_ul_curve[peak_band].x[wo_ul_curve.odict[peak_band].y.argmax()]
-    min_useful_x = x_peak_approx - 2 * rng_width
-    max_useful_x = x_peak_approx + 2 * rng_width
-    useful_idx = (curve.arrays.x[:, 1] >= min_useful_x) & (curve.arrays.x[:, 1] <= max_useful_x)
-    msd = curve.multi_state_data().convert_arrays(curve.arrays.x[useful_idx],
-                                                  curve.arrays.y[useful_idx],
-                                                  curve.arrays.err[useful_idx])
-    curve = curve.convert_msd(msd, is_binned=curve.is_binned, is_filtered=curve.is_filtered)
-
-    return curve
-
-
-def _kernels(curve, rng_width):
-    max_min_length = 0.5 * rng_width
-    diff_ = (np.max(np.diff(lc.x)) if lc.x.size > 1 else 0 for lc in curve.odict.values())
-    min_length = [max(1, min(diff, max_min_length)) for diff in diff_]
-
-    k1 = kernels.RBF(length_scale_bounds=(min_length[0], 1e4))
-    k2 = kernels.RBF(length_scale_bounds=(min_length[1], 1e4))
-    # k2 = kernels.WhiteKernel()
-    # k2 = kernels.ConstantKernel(constant_value_bounds='fixed')
-    # k3 = kernels.ConstantKernel(constant_value_bounds='fixed')
-    k3 = kernels.RBF(length_scale_bounds=(min_length[2], 1e4))
-    # k3 = kernels.WhiteKernel()
-
-    return k1, k2, k3
-
-
-def _constant_matrix_parameters():
-    m = np.array([[1, 0, 0],
-                  [0.5, 1, 0],
-                  [0.5, 0.5, 1]])
-    m_bounds = (np.array([[1e-4, 0, 0],
-                          [-1e3, -1e3, 0],
-                          [-1e3, -1e3, -1e3]]),
-                np.array([[1e4, 0, 0],
-                          [1e3, 1e3, 0],
-                          [1e3, 1e3, 1e3]]))
-
-    return m, m_bounds
-
-
 def _peak(interpolator, peak_band, bazin_fitter=None):
     X = interpolator.msd.X
     x_for_peak_search = np.linspace(X[:, 1].min(), X[:, 1].max(), 101)
@@ -79,32 +30,6 @@ def _peak(interpolator, peak_band, bazin_fitter=None):
         msd = msd + msd_bazin
     x_peak = msd.odict[peak_band].x[np.argmax(msd.odict[peak_band].y)]
     return x_peak
-
-
-def _zero_negative_fluxes(msd, x_peak):
-    new_odict = OrderedDict()
-    for band, lc in msd.odict.items():
-        new_odict[band] = lc = deepcopy(lc)
-        for i in range(lc.x.size-1, -1, -1):
-            if lc.x[i] >= x_peak:
-                continue
-            if lc.y[i] <= 0:
-                i += 1
-                break
-        i_left_nonzero = i
-        for i in range(lc.x.size):
-            if lc.x[i] <= x_peak:
-                continue
-            if lc.y[i] <= 0:
-                i -= 1
-                break
-        i_right_nonzero = i
-        lc.y[:i_left_nonzero] = 0
-        lc.err[:i_left_nonzero] = 0
-        lc.y[i_right_nonzero+1:] = 0
-        lc.err[i_right_nonzero+1:] = 0
-    msd = MultiStateData.from_state_data(new_odict)
-    return msd
 
 
 def _plot(fig_dir, orig_curve, interpolator, msd, msd_bazin=None, msd_plus_bazin=None, msd_transformed=None):
@@ -172,17 +97,17 @@ def interpolate(sn, bands, peak_band, rng=np.linspace(-50, 100, 151), fig_dir='.
     rng_width = rng.max() - rng.min()
 
     orig_curve = OSCCurve.from_json(sn, bands=bands)
-    curve = _preprocess_curve(orig_curve, peak_band, rng_width, 1e-3 * with_bazin)
+    curve = preprocess_curve_default(orig_curve, keep_interval=(-2*rng_width, 2*rng_width), peak_band=peak_band)
 
-    k1, k2, k3 = _kernels(curve, rng_width)
-    m, m_bounds = _constant_matrix_parameters()
+    kernels_ = GPInterpolator.default_initial_kernels(curve, min_length_limits=(1, 0.5*rng_width))
+    m, m_bounds = GPInterpolator.default_constant_matrix(len(curve))
     bazin_fitter = None
     if with_bazin:
         bazin_fitter = BazinFitter(curve, curve.name)
         bazin_fitter.fit(use_gradient=True)
         curve = curve - bazin_fitter()
     interpolator = GPInterpolator(
-        curve, (k1, k2, k3), m, m_bounds,
+        curve, kernels_, m, m_bounds,
         normalize_y=with_bazin,
         optimize_method='trust-constr',
         n_restarts_optimizer=0,
@@ -201,7 +126,7 @@ def interpolate(sn, bands, peak_band, rng=np.linspace(-50, 100, 151), fig_dir='.
         msd_bazin = bazin_fitter(x_)
         msd_plus_bazin = msd + msd_bazin
 
-    msd = _zero_negative_fluxes(msd, x_peak)
+    msd = zero_negative_fluxes(msd, x_peak)
 
     msd_transformed = None
     if transform is not None:
