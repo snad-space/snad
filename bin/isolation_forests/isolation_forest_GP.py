@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 import pylab as plt
 import numpy as np
 import pandas as pd
@@ -11,9 +13,9 @@ from sklearn.ensemble import IsolationForest
 
 # path to lc fitted data files
 inp_files = [
-    '../../data/extrapol_-20.0_100.0_g_pr,r_pr,i_pr.csv',
-    '../../data/extrapol_-20.0_100.0_g,r,i.csv',
-    '../../data/extrapol_-20.0_100.0_B,R,I.csv'
+    ("g'r'i", '../../data/extrapol_-20.0_100.0_g_pr,r_pr,i_pr.csv'),
+    ("gri", '../../data/extrapol_-20.0_100.0_g,r,i.csv'),
+    ("BRI", '../../data/extrapol_-20.0_100.0_B,R,I.csv')
 ]
 
 ######## user choices
@@ -27,13 +29,13 @@ plot = 'summary'
 print('\n ****    Full interpolate LC analysis    **** \n')
 print('Reading data ...')
 
-dfs = [pd.read_csv(inp) for inp in inp_files]
+dfs = [pd.read_csv(inp) for (_bandname, inp) in inp_files]
 lcs = [np.array(df.loc[:,'g-20':'i+100']) for df in dfs]
 lc_data = np.concatenate(lcs, axis=0)
 lc_data_norm = np.amax(lc_data, axis=1).reshape(-1,1)
 lc_norm = np.hstack([lc_data / lc_data_norm, -2.5*np.log10(lc_data_norm)])
 
-names = [np.array(df.loc[:,'Name']) for df in dfs]
+names = [np.array(["{} ({})".format(x, bandname) for x in df.loc[:,'Name']]) for ((bandname, _filename), df) in zip(inp_files, dfs)]
 lc_names = np.concatenate(names, axis=0)
 
 print('   ... done!')
@@ -86,7 +88,7 @@ theta_data = np.concatenate(thetas, axis=0)
 theta_data_norm = np.amax(theta_data, axis=0) - np.amin(theta_data, axis=0)
 param_norm = theta_data / theta_data_norm
 
-names = [np.array(df.loc[:,'Name']) for df in dfs]
+names = [np.array(["{} ({})".format(x, bandname) for x in df.loc[:,'Name']]) for ((bandname, _filename), df) in zip(inp_files, dfs)]
 param_names = np.concatenate(names, axis=0)
 
 print('   ... done!')
