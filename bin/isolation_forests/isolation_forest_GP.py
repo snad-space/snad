@@ -47,9 +47,10 @@ print('Fit isolation forest model ...')
 clf = IsolationForest(max_samples=lc_norm.shape[0], random_state=rng, contamination=0.01, n_estimators=lc_norm.shape[1])
 clf.fit(lc_norm)
 lc_pred = clf.predict(lc_norm)
+lc_score = clf.score_samples(lc_norm)
 
 # index of outlier objects according to the isolation forest algorithm
-indx_iso_GP = [i for i in range(lc_pred.shape[0]) if lc_pred[i] == -1]
+indx_iso_GP = sorted([i for i in range(lc_pred.shape[0]) if lc_pred[i] == -1], key=lambda x: lc_score[x])
 
 print(   '... done!')
 print('Number of outliers from isoforest + GP fit: ', str(len(indx_iso_GP)))
@@ -59,7 +60,7 @@ output_file1 = 'weirdSN_isoforest_GPfit.dat'
 
 op3 = open(output_file1, 'w')
 for i in range(len(indx_iso_GP)):
-    op3.write(lc_names[indx_iso_GP[i]] + '\n')
+    op3.write(lc_names[indx_iso_GP[i]] + ", " + str(lc_score[indx_iso_GP[i]]) + '\n')
 op3.close()
 
 print('Anomalies list saved in file: ', output_file1)
@@ -100,9 +101,10 @@ print('Fit isolation forest model ...')
 clf_param = IsolationForest(max_samples=param_norm.shape[0], random_state=rng, contamination=0.01, n_estimators=param_norm.shape[1])
 clf_param.fit(param_norm)
 param_pred = clf_param.predict(param_norm)
+param_score = clf_param.score_samples(param_norm)
 
 # index of outlier objects
-indx_iso_param = [i for i in range(param_pred.shape[0]) if param_pred[i] == -1]
+indx_iso_param = sorted([i for i in range(param_pred.shape[0]) if param_pred[i] == -1], key=lambda x: param_score[x])
 
 print('   ...done!')
 print('\n Number of outliers from isoforest + GP parametres: ', str(len(indx_iso_param)))
@@ -112,7 +114,7 @@ output_file2 = 'weirdSN_isoforest_GPparam.dat'
 
 op4 = open(output_file2, 'w')
 for i in range(len(indx_iso_param)):
-    op4.write(param_names[indx_iso_param[i]] + '\n')
+    op4.write(param_names[indx_iso_param[i]] + ", " + str(param_score[indx_iso_param[i]]) + '\n')
 op4.close()
 
 print('\n Anomalies list saved in file: ', output_file2)

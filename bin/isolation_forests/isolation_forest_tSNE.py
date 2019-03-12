@@ -63,9 +63,10 @@ for k in range(2, 10):
     clf = IsolationForest(max_samples=2000, random_state=rng, n_estimators=1000, contamination=0.02)
     clf.fit(data)
     pred = clf.predict(data) 
+    score = clf.score_samples(data)
 
     # index of outlier objects according to the isolation forest algorithm
-    indx_iso = [i for i in range(pred.shape[0]) if pred[i] == -1]
+    indx_iso = sorted([i for i in range(pred.shape[0]) if pred[i] == -1], key=lambda x: score[x])
                 
     print(   '... done!')
     print('Number of outliers from isoforest + tSNE_', str(k),': ', str(len(indx_iso)))
@@ -75,7 +76,7 @@ for k in range(2, 10):
 
     op3 = open(output_file1, 'w')
     for i in range(len(indx_iso)):
-        op3.write(names[indx_iso[i]] + '\n')
+        op3.write(names[indx_iso[i]] + ", " + str(score[indx_iso[i]]) + '\n')
     op3.close()
 
     print('Anomalies list saved in file: ', output_file1)
