@@ -2,7 +2,7 @@ import unittest
 import numpy as np
 from collections import OrderedDict
 from multistate_kernel.util import MultiStateData
-from thesnisright.interpolate.bazin import BazinFitter
+from snad.interpolate.bazin import BazinFitter
 
 
 class TestBazinFitter(unittest.TestCase):

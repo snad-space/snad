@@ -1,6 +1,6 @@
 import doctest
 
-from thesnisright.process import util
+from snad.process import util
 
 
 def load_tests(loader, tests, ignore):

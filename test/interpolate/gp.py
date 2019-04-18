@@ -1,6 +1,6 @@
 import doctest
 
-from thesnisright.interpolate import gp
+from snad.interpolate import gp
 
 
 def load_tests(loader, tests, ignore):

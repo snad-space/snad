@@ -1,7 +1,7 @@
 import os
 import unittest
 
-from thesnisright.load import foreign_data_samples as fds
+from snad.load import foreign_data_samples as fds
 
 _dir_path = os.path.dirname(__file__)
 _data_path = os.path.join(_dir_path, 'data/spec_class_samples')

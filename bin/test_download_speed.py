@@ -3,7 +3,7 @@
 import time
 import shutil
 
-from thesnisright import SNFiles
+from snad import SNFiles
 
 
 small_files = [

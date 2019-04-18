@@ -15,7 +15,7 @@ try:
 except ImportError:
     import mock
 
-from thesnisright.load.snfiles import SNFiles
+from snad.load.snfiles import SNFiles
 
 from ._sn_lists import *
 

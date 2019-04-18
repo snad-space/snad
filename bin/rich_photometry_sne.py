@@ -8,9 +8,9 @@ from functools import partial
 
 import numpy as np
 
-from thesnisright import SNFiles, OSCCurve, get_anderson_sne, get_cccp_sne, get_pantheon_sne_suffixes, get_sanders_sne
-from thesnisright.load.snfiles import all_snad_objects
-from thesnisright.load.curves import EmptyPhotometryError, NoPhotometryError
+from snad import SNFiles, OSCCurve, get_anderson_sne, get_cccp_sne, get_pantheon_sne_suffixes, get_sanders_sne
+from snad.load.snfiles import all_snad_objects
+from snad.load.curves import EmptyPhotometryError, NoPhotometryError
 
 
 MIN_NUMBER_OF_SPECTRA_FOR_CLASSIFICATION = 3

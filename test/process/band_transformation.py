@@ -4,7 +4,7 @@ import numpy as np
 from numpy.testing import assert_allclose
 from multistate_kernel.util import MultiStateData
 
-from thesnisright import transform_bands_msd, BRI_to_gri
+from snad import transform_bands_msd, BRI_to_gri
 
 
 class BRI2griTestCase(unittest.TestCase):

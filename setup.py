@@ -3,7 +3,7 @@
 from setuptools import setup, find_packages
 
 setup(
-    name='theSNisRight',
+    name='snad',
     license='MIT',
     author='Konstantin Malanchev',
     author_email='malanchev@physics.msu.ru',

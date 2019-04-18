@@ -311,7 +311,7 @@ def _plot_bazin(filename, bazin):
 
 
 if __name__ == '__main__':
-    from thesnisright import OSCCurve
+    from snad import OSCCurve
 
     sn = 'ASASSN-14lp'
     crv = OSCCurve.from_name(sn).filtered(bands=('g', 'r', 'i'))

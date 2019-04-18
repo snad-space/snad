@@ -10,9 +10,9 @@ from __future__ import print_function
 
 import numpy as np
 import matplotlib.pyplot as plt
-from thesnisright import OSCCurve, GPInterpolator
+from snad import OSCCurve, GPInterpolator
 from sklearn.gaussian_process import kernels
-import thesnisright.process.band_transformation as bt
+import snad.process.band_transformation as bt
 
 
 

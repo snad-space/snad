@@ -12,7 +12,7 @@ import six
 from six import iteritems, itervalues
 from numpy.testing import assert_allclose, assert_equal
 
-from thesnisright.load.curves import OSCCurve, SNFiles, NoPhotometryError, EmptyPhotometryError
+from snad.load.curves import OSCCurve, SNFiles, NoPhotometryError, EmptyPhotometryError
 
 from ._sn_lists import *
 

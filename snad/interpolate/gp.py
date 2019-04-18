@@ -194,7 +194,7 @@ class GPInterpolator(object):
         Examples
         --------
         For `n = 1`:
-        >>> from thesnisright import GPInterpolator
+        >>> from snad import GPInterpolator
         >>> m, m_bounds = GPInterpolator.default_constant_matrix(1)
         >>> print(m)
         [[1.]]
@@ -203,7 +203,7 @@ class GPInterpolator(object):
 
         For `n = 3`:
 
-        >>> from thesnisright import GPInterpolator
+        >>> from snad import GPInterpolator
         >>> m, m_bounds = GPInterpolator.default_constant_matrix(3)
         >>> print(m)
         [[1.  0.  0. ]

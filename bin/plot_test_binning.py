@@ -4,7 +4,7 @@ import matplotlib; matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import numpy as np
 
-from thesnisright import OSCCurve
+from snad import OSCCurve
 
 JSON_PATH = '../test/load/data/test_binning.json'
 BAND = 'X'

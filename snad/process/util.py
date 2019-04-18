@@ -78,7 +78,7 @@ def zero_negative_fluxes(msd, x_peak=None):
 
     >>> import numpy as np
     >>> from multistate_kernel.util import MultiStateData
-    >>> from thesnisright.process.util import zero_negative_fluxes
+    >>> from snad.process.util import zero_negative_fluxes
     >>>
     >>> x = np.arange(5, dtype=np.float)
     >>> y = np.array([-3., 5., -2., 1., -77.])
@@ -93,7 +93,7 @@ def zero_negative_fluxes(msd, x_peak=None):
 
     >>> import numpy as np
     >>> from multistate_kernel.util import MultiStateData
-    >>> from thesnisright.process.util import zero_negative_fluxes
+    >>> from snad.process.util import zero_negative_fluxes
     >>>
     >>> x = np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10], dtype=np.float)
     >>> x_peak = 5.

@@ -7,9 +7,9 @@ from copy import deepcopy
 import numpy as np
 from multistate_kernel.util import MultiStateData
 
-from thesnisright import OSCCurve, BazinFitter, SNFiles, transform_bands_msd
-from thesnisright.interpolate.gp import GPInterpolator
-from thesnisright.process.util import preprocess_curve_default, zero_negative_fluxes
+from snad import OSCCurve, BazinFitter, SNFiles, transform_bands_msd
+from snad.interpolate.gp import GPInterpolator
+from snad.process.util import preprocess_curve_default, zero_negative_fluxes
 
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(__file__))
@@ -179,7 +179,7 @@ if __name__ == '__main__':
     import sys
     import multiprocessing
     from functools import partial
-    from thesnisright import BRI_to_gri
+    from snad import BRI_to_gri
 
     band_sets = ('B,R,I', 'g,r,i', "g',r',i'",)
     if len(sys.argv) > 1:
