@@ -1,6 +1,3 @@
-# theSNisRight
-Yet another SN classifier
-
 # fig/
 
 Contains the plots with found anomalies.
