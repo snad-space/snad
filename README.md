@@ -43,17 +43,17 @@ The results of the extrapolation were checked by eye. These files are mainly use
 
 `isolation_forests/` contains results of isolation forest algorithm run on 10 datasets:
 
-A) *weirdSN_isoforest_GPfit.dat*
- 
-data set of 364 photometric characteristics (121×3normalized fluxes, the LC flux maximum),
+  * *weirdSN_isoforest_GPfit.dat*
 
-B) *weirdSN_isoforest_GPparam.dat*
+    data set of 364 photometric characteristics (121×3normalized fluxes, the LC flux maximum),
 
-data set of 10 parameters of the Gaussian process (9 fitted parameters of the kernel, the log-likelihood of the fit),
+  * *weirdSN_isoforest_GPparam.dat*
 
-C) *weirdSN_isoforest_tSNE_*.dat* 
+    data set of 10 parameters of the Gaussian process (9 fitted parameters of the kernel, the log-likelihood of the fit),
 
-8 data sets obtained by reducing 374 features to 2-9 t-SNE dimensions.
+  * *weirdSN_isoforest_tSNE_\*.dat* 
+
+    8 data sets obtained by reducing 374 features to 2-9 t-SNE dimensions.
 
 
 ---------------------------------------------------------------------------------------------------
@@ -63,4 +63,4 @@ C) *weirdSN_isoforest_tSNE_*.dat*
 
 # Feedback
 
-You can send feedback via [e-mail](mailto:) or via [Github](https://github.com/sai-msu/snad/issues). 
+You can send feedback via [e-mail](mailto:malanchev@physics.msu.ru) or via [Github](https://github.com/sai-msu/snad/issues). 
