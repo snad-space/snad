@@ -505,3 +505,7 @@ class LightCurveBinningTestCase(unittest.TestCase):
         self.assertEqual(dot['y'], binned['y'])
         self.assertEqual(dot['err'], binned['err'])
         self.assertFalse(binned['isupperlimit'])
+
+class MagnToFromFlux(unittest.TestCase):
+    def test_magn_to_flux_to_magn():
+        raise NotImplemented

@@ -449,6 +449,20 @@ class SNCurve(MultiStateData):
 
         return True
 
+    @staticmethod
+    def magn_to_flux(magn, e_magn, mag_zp=0.0):
+        """Convert magnitudes to fluxes"""
+        flux = np.power(10, -0.4 * (magn - magn_zp))
+        e_flux = 0.4 * np.log(10) * flux * e_magn
+        return flux, e_flux
+
+    @staticmethod
+    def flux_to_magn(flux, e_flux, mag_zp=0.0):
+        """Convert fluxes to magnitudes"""
+        magn = magn_zp - 2.5 * np.log10(flux)
+        e_magn = 2.5 / np.log(10) / flux * e_flux
+        return magn, e_magn
+
     @property
     def bands(self):
         return tuple(self.keys())
